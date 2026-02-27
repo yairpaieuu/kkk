@@ -28,7 +28,7 @@
             
             <!-- 1. Logo (UPDATED) -->
             <a href="/" class="flex items-center gap-3 group">
-                <img src="/assets/logo.png" alt="Logo" class="h-10 w-auto object-contain group-hover:scale-105 transition duration-300">
+                <img src="/assets/logo.png" alt="Logo" class="h-10 w-auto object-contain group-hover:scale-105 transition duration-300" loading="eager">
                 <div class="flex flex-col">
                     <span class="text-xl font-bold text-white tracking-tight leading-none group-hover:text-blue-400 transition">KKK LED</span>
                     <span class="text-[10px] text-gray-400 uppercase tracking-widest">Shop</span>
@@ -72,7 +72,7 @@
     <header class="md:hidden flex items-center justify-between px-4 py-4 bg-[#0f172a] sticky top-0 z-40 border-b border-white/5">
         <!-- Logo (UPDATED) -->
         <a href="/" class="flex items-center gap-2">
-            <img src="/assets/logo.png" alt="Logo" class="h-8 w-auto object-contain">
+            <img src="/assets/logo.png" alt="Logo" class="h-8 w-auto object-contain" loading="eager">
             <span class="font-bold text-lg text-white">KKK LED</span>
         </a>
         <div class="flex items-center gap-3">
@@ -150,7 +150,7 @@
                 <div class="col-span-1">
                     <!-- Logo (UPDATED) -->
                     <div class="flex items-center gap-3 mb-4">
-                        <img src="/assets/logo.png" alt="Logo" class="h-8 w-auto object-contain">
+                        <img src="/assets/logo.png" alt="Logo" class="h-8 w-auto object-contain" loading="eager">
                         <span class="font-bold text-xl text-white">KKK LED</span>
                     </div>
                     <p class="text-gray-400 text-sm leading-relaxed">

@@ -25,10 +25,10 @@
                     <div class="swiper-slide relative bg-gray-900">
                         <?php if($banner['link_url']): ?>
                             <a href="<?= htmlspecialchars($banner['link_url']) ?>" class="block w-full h-full">
-                                <img src="/<?= $banner['image_path'] ?>" class="w-full h-full object-cover object-center" alt="Banner">
+                                <img src="/<?= $banner['image_path'] ?>" class="w-full h-full object-cover object-center" alt="Banner" loading="eager" fetchpriority="high">
                             </a>
                         <?php else: ?>
-                            <img src="/<?= $banner['image_path'] ?>" class="w-full h-full object-cover object-center" alt="Banner">
+                            <img src="/<?= $banner['image_path'] ?>" class="w-full h-full object-cover object-center" alt="Banner" loading="eager" fetchpriority="high">
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
@@ -55,7 +55,7 @@
             
             function renderCard($p) {
                 $imageHtml = $p['image'] 
-                    ? '<img src="/'.htmlspecialchars($p['image']).'" class="w-full h-full object-cover group-hover:scale-110 transition duration-700 ease-in-out" alt="'.htmlspecialchars($p['name']).'">' 
+                    ? '<img src="/'.htmlspecialchars($p['image']).'" class="w-full h-full object-cover group-hover:scale-110 transition duration-700 ease-in-out" alt="'.htmlspecialchars($p['name']).'" loading="lazy" decoding="async">' 
                     : '<div class="w-full h-full flex items-center justify-center bg-gray-800/50"><span class="text-3xl opacity-50">🖼️</span></div>';
 
                 $typeLabel = strtolower($p['type']) === 'digital' ? 'DIGITAL' : 'PHYSICAL PRODUCT';

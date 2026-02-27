@@ -1550,10 +1550,62 @@ if (!class_exists('AdminController')) {
         private function uploadFile($file) {
             $uploadDir = dirname(__DIR__) . '/../uploads/';
             if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
-            
-            $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-            $filename = uniqid('img_') . '.' . $ext;
-            
+
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            $videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi'];
+            $imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
+            $isImage = in_array($ext, $imageExts);
+            $isVideo = in_array($ext, $videoExts);
+
+            // Optimize and convert images to WebP using GD
+            if ($isImage && extension_loaded('gd') && function_exists('imagewebp')) {
+                $loaders = [
+                    'jpg'  => 'imagecreatefromjpeg',
+                    'jpeg' => 'imagecreatefromjpeg',
+                    'png'  => 'imagecreatefrompng',
+                    'gif'  => 'imagecreatefromgif',
+                    'bmp'  => 'imagecreatefrombmp',
+                    'webp' => 'imagecreatefromwebp',
+                ];
+                $loader = $loaders[$ext] ?? null;
+                $src = $loader ? @$loader($file['tmp_name']) : false;
+                if ($src !== false) {
+                    $origWidth  = imagesx($src);
+                    $origHeight = imagesy($src);
+                    $maxDim = 1200;
+
+                    if ($origWidth > $maxDim || $origHeight > $maxDim) {
+                        if ($origWidth >= $origHeight) {
+                            $newWidth  = $maxDim;
+                            $newHeight = (int) round($origHeight * ($maxDim / $origWidth));
+                        } else {
+                            $newHeight = $maxDim;
+                            $newWidth  = (int) round($origWidth * ($maxDim / $origHeight));
+                        }
+                    } else {
+                        $newWidth  = $origWidth;
+                        $newHeight = $origHeight;
+                    }
+
+                    $dst = imagecreatetruecolor($newWidth, $newHeight);
+                    imagealphablending($dst, false);
+                    imagesavealpha($dst, true);
+                    imagecopyresampled($dst, $src, 0, 0, 0, 0, $newWidth, $newHeight, $origWidth, $origHeight);
+
+                    $filename = uniqid('img_') . '.webp';
+                    if (imagewebp($dst, $uploadDir . $filename, 85)) {
+                        imagedestroy($src);
+                        imagedestroy($dst);
+                        return 'uploads/' . $filename;
+                    }
+                    imagedestroy($src);
+                    imagedestroy($dst);
+                }
+            }
+
+            // Fallback: save file as-is (videos or if GD processing fails)
+            $prefix = $isVideo ? 'video_' : 'file_';
+            $filename = uniqid($prefix) . '.' . $ext;
             if (move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) {
                 return 'uploads/' . $filename;
             }

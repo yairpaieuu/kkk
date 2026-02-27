@@ -66,7 +66,7 @@ function isVideo($path) {
                                 <video src="/<?= $media ?>" class="w-full h-full object-cover"></video>
                                 <div class="absolute inset-0 flex items-center justify-center bg-black/40"><i class="fa-solid fa-play text-white text-xs"></i></div>
                             <?php else: ?>
-                                <img src="/<?= $media ?>" class="w-full h-full object-cover">
+                                <img src="/<?= $media ?>" class="w-full h-full object-cover" loading="lazy" decoding="async">
                             <?php endif; ?>
                         </button>
                     <?php endforeach; ?>
@@ -193,7 +193,7 @@ function isVideo($path) {
                 <span class="absolute inset-0 z-10"></span>
                 <div class="aspect-square overflow-hidden relative bg-gray-900">
                     <?php if($rec['image']): ?>
-                        <img src="/<?= htmlspecialchars($rec['image']) ?>" class="w-full h-full object-cover group-hover:scale-110 transition duration-500">
+                        <img src="/<?= htmlspecialchars($rec['image']) ?>" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" loading="lazy" decoding="async">
                     <?php else: ?>
                         <div class="w-full h-full flex items-center justify-center text-gray-600 text-xs">No Image</div>
                     <?php endif; ?>

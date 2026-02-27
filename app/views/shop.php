@@ -151,7 +151,7 @@
                         class="bg-blue-600 hover:bg-blue-500 text-white w-8 h-8 flex items-center justify-center rounded-lg shadow-lg shadow-blue-600/20 active:scale-90 transition z-20 relative"><i class="fa-solid fa-cart-plus"></i></button>`;
 
                 const imageHtml = p.image 
-                    ? `<img src="/${p.image}" class="w-full h-full object-cover group-hover:scale-110 transition duration-500">`
+                    ? `<img src="/${p.image}" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" loading="lazy" decoding="async">`
                     : `<div class="w-full h-full flex items-center justify-center text-gray-600 flex-col gap-2"><i class="fa-regular fa-image text-2xl"></i><span class="text-xs">No Image</span></div>`;
 
                 // --- DISCOUNT LOGIC ---
