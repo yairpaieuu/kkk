@@ -1548,115 +1548,132 @@ if (!class_exists('AdminController')) {
         }
 
         public function bulkOptimizeImages() {
-            $this->checkPermission(['admin']);
+            // Set JSON header first so any error response is also JSON-typed
             header('Content-Type: application/json');
+            // Buffer all output so PHP warnings (display_errors=1) cannot corrupt the JSON body
+            ob_start();
 
-            if (!extension_loaded('gd') || !function_exists('imagewebp')) {
-                echo json_encode(['success' => false, 'error' => 'GD extension with WebP support is not available.']);
-                exit;
-            }
+            try {
+                $this->checkPermission(['admin']);
 
-            $uploadDir = dirname(__DIR__) . '/../uploads/';
-            $maxDim    = 1200;
-
-            // Map EXIF image type constants to GD loader functions
-            $typeLoaders = [
-                IMAGETYPE_JPEG => 'imagecreatefromjpeg',
-                IMAGETYPE_PNG  => 'imagecreatefrompng',
-                IMAGETYPE_GIF  => 'imagecreatefromgif',
-                IMAGETYPE_BMP  => 'imagecreatefrombmp',
-                IMAGETYPE_WEBP => null, // already WebP — skip
-            ];
-
-            $stats = ['processed' => 0, 'skipped' => 0, 'failed' => 0, 'saved_bytes' => 0];
-
-            if (!is_dir($uploadDir)) {
-                echo json_encode(['success' => true, 'stats' => $stats, 'message' => 'No uploads directory found.']);
-                exit;
-            }
-
-            $files = scandir($uploadDir);
-            foreach ($files as $fname) {
-                if ($fname === '.' || $fname === '..') continue;
-                $srcPath = $uploadDir . $fname;
-                if (!is_file($srcPath)) continue;
-
-                // Detect actual image type from file content (ignores misleading extensions)
-                $imageType = @exif_imagetype($srcPath);
-                if ($imageType === false || !array_key_exists($imageType, $typeLoaders)) {
-                    // Not a supported image type (video, document, etc.) — skip silently
-                    continue;
-                }
-                if ($imageType === IMAGETYPE_WEBP) {
-                    // Already WebP — nothing to do
-                    $stats['skipped']++;
-                    continue;
+                if (!extension_loaded('gd') || !function_exists('imagewebp')) {
+                    ob_clean();
+                    echo json_encode(['success' => false, 'error' => 'GD extension with WebP support is not available.']);
+                    exit;
                 }
 
-                $oldRelative = 'uploads/' . $fname;
-                $newFname    = pathinfo($fname, PATHINFO_FILENAME) . '.webp';
-                $dstPath     = $uploadDir . $newFname;
-                $newRelative = 'uploads/' . $newFname;
+                // Allow plenty of time for large image batches
+                set_time_limit(300);
 
-                // If WebP already exists, sync DB references and remove the old original
-                if (file_exists($dstPath)) {
+                $uploadDir = dirname(__DIR__) . '/../uploads/';
+                $maxDim    = 1200;
+
+                // Map EXIF image type constants to GD loader functions
+                $typeLoaders = [
+                    IMAGETYPE_JPEG => 'imagecreatefromjpeg',
+                    IMAGETYPE_PNG  => 'imagecreatefrompng',
+                    IMAGETYPE_GIF  => 'imagecreatefromgif',
+                    IMAGETYPE_BMP  => 'imagecreatefrombmp',
+                    IMAGETYPE_WEBP => null, // already WebP — skip
+                ];
+
+                $stats = ['processed' => 0, 'skipped' => 0, 'failed' => 0, 'saved_bytes' => 0];
+
+                if (!is_dir($uploadDir)) {
+                    ob_clean();
+                    echo json_encode(['success' => true, 'stats' => $stats, 'message' => 'No uploads directory found.']);
+                    exit;
+                }
+
+                $files = scandir($uploadDir);
+                foreach ($files as $fname) {
+                    if ($fname === '.' || $fname === '..') continue;
+                    $srcPath = $uploadDir . $fname;
+                    if (!is_file($srcPath)) continue;
+
+                    // Detect actual image type from file content (ignores misleading extensions)
+                    $imageType = @exif_imagetype($srcPath);
+                    if ($imageType === false || !array_key_exists($imageType, $typeLoaders)) {
+                        // Not a supported image type (video, document, etc.) — skip silently
+                        continue;
+                    }
+                    if ($imageType === IMAGETYPE_WEBP) {
+                        // Already WebP — nothing to do
+                        $stats['skipped']++;
+                        continue;
+                    }
+
+                    $oldRelative = 'uploads/' . $fname;
+                    $newFname    = pathinfo($fname, PATHINFO_FILENAME) . '.webp';
+                    $dstPath     = $uploadDir . $newFname;
+                    $newRelative = 'uploads/' . $newFname;
+
+                    // If WebP already exists, sync DB references and remove the old original
+                    if (file_exists($dstPath)) {
+                        $this->db->prepare("UPDATE products SET image=? WHERE image=?")->execute([$newRelative, $oldRelative]);
+                        $this->db->prepare("UPDATE product_images SET image_path=? WHERE image_path=?")->execute([$newRelative, $oldRelative]);
+                        $this->db->prepare("UPDATE banners SET image_path=? WHERE image_path=?")->execute([$newRelative, $oldRelative]);
+                        @unlink($srcPath);
+                        $stats['skipped']++;
+                        continue;
+                    }
+
+                    $loader = $typeLoaders[$imageType];
+                    $src    = @$loader($srcPath);
+                    if ($src === false) { $stats['failed']++; continue; }
+
+                    $origWidth  = imagesx($src);
+                    $origHeight = imagesy($src);
+
+                    if ($origWidth > $maxDim || $origHeight > $maxDim) {
+                        if ($origWidth >= $origHeight) {
+                            $newWidth  = $maxDim;
+                            $newHeight = (int) round($origHeight * ($maxDim / $origWidth));
+                        } else {
+                            $newHeight = $maxDim;
+                            $newWidth  = (int) round($origWidth * ($maxDim / $origHeight));
+                        }
+                    } else {
+                        $newWidth  = $origWidth;
+                        $newHeight = $origHeight;
+                    }
+
+                    $dst = imagecreatetruecolor($newWidth, $newHeight);
+                    imagealphablending($dst, false);
+                    imagesavealpha($dst, true);
+                    imagecopyresampled($dst, $src, 0, 0, 0, 0, $newWidth, $newHeight, $origWidth, $origHeight);
+
+                    $originalSize = filesize($srcPath);
+
+                    if (!imagewebp($dst, $dstPath, 85)) {
+                        imagedestroy($src);
+                        imagedestroy($dst);
+                        $stats['failed']++;
+                        continue;
+                    }
+                    imagedestroy($src);
+                    imagedestroy($dst);
+
+                    // Update DB references
                     $this->db->prepare("UPDATE products SET image=? WHERE image=?")->execute([$newRelative, $oldRelative]);
                     $this->db->prepare("UPDATE product_images SET image_path=? WHERE image_path=?")->execute([$newRelative, $oldRelative]);
                     $this->db->prepare("UPDATE banners SET image_path=? WHERE image_path=?")->execute([$newRelative, $oldRelative]);
+
+                    $newSize = filesize($dstPath);
+                    $stats['saved_bytes'] += max(0, $originalSize - $newSize);
+
+                    // Remove original file
                     @unlink($srcPath);
-                    $stats['skipped']++;
-                    continue;
+                    $stats['processed']++;
                 }
 
-                $loader = $typeLoaders[$imageType];
-                $src    = @$loader($srcPath);
-                if ($src === false) { $stats['failed']++; continue; }
+                ob_clean();
+                echo json_encode(['success' => true, 'stats' => $stats]);
 
-                $origWidth  = imagesx($src);
-                $origHeight = imagesy($src);
-
-                if ($origWidth > $maxDim || $origHeight > $maxDim) {
-                    if ($origWidth >= $origHeight) {
-                        $newWidth  = $maxDim;
-                        $newHeight = (int) round($origHeight * ($maxDim / $origWidth));
-                    } else {
-                        $newHeight = $maxDim;
-                        $newWidth  = (int) round($origWidth * ($maxDim / $origHeight));
-                    }
-                } else {
-                    $newWidth  = $origWidth;
-                    $newHeight = $origHeight;
-                }
-
-                $dst = imagecreatetruecolor($newWidth, $newHeight);
-                imagealphablending($dst, false);
-                imagesavealpha($dst, true);
-                imagecopyresampled($dst, $src, 0, 0, 0, 0, $newWidth, $newHeight, $origWidth, $origHeight);
-
-                if (!imagewebp($dst, $dstPath, 85)) {
-                    imagedestroy($src);
-                    imagedestroy($dst);
-                    $stats['failed']++;
-                    continue;
-                }
-                imagedestroy($src);
-                imagedestroy($dst);
-
-                // Update DB references
-                $this->db->prepare("UPDATE products SET image=? WHERE image=?")->execute([$newRelative, $oldRelative]);
-                $this->db->prepare("UPDATE product_images SET image_path=? WHERE image_path=?")->execute([$newRelative, $oldRelative]);
-                $this->db->prepare("UPDATE banners SET image_path=? WHERE image_path=?")->execute([$newRelative, $oldRelative]);
-
-                $originalSize = filesize($srcPath);
-                $newSize      = filesize($dstPath);
-                $stats['saved_bytes'] += max(0, $originalSize - $newSize);
-
-                // Remove original file
-                @unlink($srcPath);
-                $stats['processed']++;
+            } catch (Throwable $e) {
+                ob_clean();
+                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             }
-
-            echo json_encode(['success' => true, 'stats' => $stats]);
             exit;
         }
 
