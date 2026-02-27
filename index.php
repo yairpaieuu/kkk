@@ -218,6 +218,11 @@ try {
             (new AdminController())->addBanner();
             break;
 
+        case '/admin/images/optimize':
+            requireAuth();
+            (new AdminController())->bulkOptimizeImages();
+            break;
+
         case '/admin/banner/delete':
             requireAuth();
             (new AdminController())->deleteBanner();
