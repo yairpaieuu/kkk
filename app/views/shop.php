@@ -1,205 +1,324 @@
-<!-- Load FontAwesome for Icons -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<?php
+    $shopHeader = $pageSections['page_header'] ?? null;
+    $showHeader = $shopHeader && isset($shopHeader['is_visible']) && (int)$shopHeader['is_visible'] === 1;
+    $headerTitle   = $showHeader ? (htmlspecialchars($shopHeader['title']   ?? 'Our Products')) : 'Our Products';
+    $headerContent = $showHeader ? (htmlspecialchars($shopHeader['content'] ?? ''))             : '';
 
-<div class="pb-24">
-    
-    <!-- 1. SEARCH & FILTER HEADER -->
-    <div class="sticky top-0 z-30 bg-[#0f172a]/95 backdrop-blur-md py-4 border-b border-white/5 -mx-4 px-4 mb-6 -mt-4">
-        <form id="filterForm" onsubmit="event.preventDefault(); fetchProducts();">
-            
-            <!-- Search Bar -->
-            <div class="relative mb-4">
-                <input type="text" id="searchInput" placeholder="Search products..." oninput="debounceSearch()"
-                    class="w-full bg-gray-800 border border-gray-700 text-white placeholder-gray-500 rounded-xl py-3 pl-12 pr-4 outline-none focus:border-blue-500 transition shadow-lg">
-                <button type="submit" class="absolute left-0 top-0 h-full w-12 flex items-center justify-center text-gray-400 hover:text-white transition">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                </button>
+    function shopRenderCard(array $p): string {
+        $isDigital = strtolower($p['type']) === 'digital';
+        $typeCls   = $isDigital ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600';
+        $typeLabel = $isDigital ? 'DIGITAL' : 'PHYSICAL';
+
+        $img = $p['image']
+            ? '<img src="/' . htmlspecialchars($p['image']) . '" alt="' . htmlspecialchars($p['name']) . '"
+                   class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                   loading="lazy" decoding="async">'
+            : '<div class="w-full h-full flex items-center justify-center bg-slate-100">
+                   <i class="fa-regular fa-image text-4xl text-slate-300"></i>
+               </div>';
+
+        if ($isDigital) {
+            $stock = '<span class="inline-flex items-center gap-1 text-xs text-blue-600 font-medium">
+                          <i class="fa-solid fa-bolt text-[10px]"></i> Instant Delivery
+                      </span>';
+        } else {
+            $inStock = (int)($p['stock'] ?? 0) > 0;
+            $stock = $inStock
+                ? '<span class="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                       <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block"></span> In Stock
+                   </span>'
+                : '<span class="inline-flex items-center gap-1 text-xs text-rose-500 font-medium">
+                       <span class="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block"></span> Out of Stock
+                   </span>';
+        }
+
+        $hasDiscount = !empty($p['has_discount']) && !empty($p['original_price']) && (int)($p['discount_percent'] ?? 0) > 0;
+        if ($hasDiscount) {
+            $priceHtml = '<div class="flex items-baseline gap-1.5">
+                <span class="text-base font-bold text-blue-600">' . number_format($p['price']) . ' Ks</span>
+                <span class="text-xs text-slate-400 line-through">' . number_format($p['original_price']) . ' Ks</span>
+              </div>';
+            $discountBadge = '<span class="absolute top-2 left-2 bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md z-10">
+                                  -' . (int)$p['discount_percent'] . '%
+                              </span>';
+        } else {
+            $priceHtml     = '<span class="text-base font-bold text-blue-600">' . number_format($p['price']) . ' Ks</span>';
+            $discountBadge = '';
+        }
+
+        $outOfStock = !$isDigital && (int)($p['stock'] ?? 0) <= 0;
+        if ($outOfStock) {
+            $cartBtn = '<button disabled
+                            class="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg bg-slate-200 text-slate-400 text-sm font-semibold cursor-not-allowed z-20 relative">
+                            <i class="fa-solid fa-ban text-xs"></i> Out of Stock
+                        </button>';
+        } else {
+            $cartBtn = '<button
+                            onclick="addToCart(this)"
+                            data-id="'    . $p['id']                           . '"
+                            data-name="'  . htmlspecialchars($p['name'])        . '"
+                            data-price="' . $p['price']                         . '"
+                            data-image="' . htmlspecialchars($p['image'] ?? '') . '"
+                            data-type="'  . $p['type']                          . '"
+                            data-stock="' . ($p['stock'] ?? 0)                  . '"
+                            class="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-sm font-semibold transition-all duration-150 z-20 relative">
+                            <i class="fa-solid fa-cart-plus text-xs"></i> Add to Cart
+                        </button>';
+        }
+
+        return '
+        <div class="bg-white rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 overflow-hidden flex flex-col group relative border border-slate-100">
+            <a href="/product?id=' . $p['id'] . '" class="absolute inset-0 z-10" aria-label="' . htmlspecialchars($p['name']) . '"></a>
+            <div class="aspect-square overflow-hidden bg-slate-50 relative">
+                ' . $img . '
+                ' . $discountBadge . '
+                <span class="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-md ' . $typeCls . ' z-10">' . $typeLabel . '</span>
             </div>
+            <div class="p-3 flex flex-col flex-grow gap-2">
+                <h3 class="text-slate-800 font-semibold text-sm leading-snug line-clamp-2">' . htmlspecialchars($p['name']) . '</h3>
+                ' . $stock . '
+                <div class="mt-auto pt-2 border-t border-slate-100 flex flex-col gap-2 pointer-events-auto">
+                    ' . $priceHtml . '
+                    ' . $cartBtn . '
+                </div>
+            </div>
+        </div>';
+    }
+?>
 
-            <div class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                
-                <!-- Category Select (UPDATED) -->
-                <div class="relative min-w-[160px]">
-                    <select id="catSelect" onchange="fetchProducts()" class="w-full appearance-none bg-gray-800 text-white text-sm rounded-lg pl-9 pr-8 py-2.5 border border-gray-700 outline-none focus:border-blue-500 cursor-pointer hover:bg-gray-700 transition">
-                        <option value="">All Categories</option>
-                        <optgroup label="Main Types">
-                            <option value="physical">All Physical Items</option>
-                            <option value="digital">All Digital Goods</option>
-                        </optgroup>
-                        
-                        <!-- Dynamic Categories -->
-                        <?php if(!empty($categories)): ?>
-                            <optgroup label="Specific Categories">
-                                <?php foreach($categories as $c): ?>
-                                    <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['name']) ?></option>
-                                <?php endforeach; ?>
-                            </optgroup>
-                        <?php endif; ?>
-                    </select>
-                    <i class="fa-solid fa-layer-group absolute left-3 top-3 text-gray-400 text-xs pointer-events-none"></i>
-                    <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-gray-500 text-[10px] pointer-events-none"></i>
+<div class="min-h-screen bg-slate-50 pb-16">
+
+    <?php /* ── Page Header ─────────────────────────────────────── */ ?>
+    <?php if ($showHeader): ?>
+    <div class="bg-white border-b border-slate-200 py-8">
+        <div class="max-w-7xl mx-auto px-4">
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-800"><?= $headerTitle ?></h1>
+            <?php if ($headerContent): ?>
+            <p class="mt-1 text-slate-500 text-sm"><?= $headerContent ?></p>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php else: ?>
+    <div class="bg-white border-b border-slate-200 py-8">
+        <div class="max-w-7xl mx-auto px-4">
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-800">Our Products</h1>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php /* ── Sticky Filter Bar ──────────────────────────────── */ ?>
+    <div class="sticky top-0 z-30 bg-white shadow-sm border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+            <form id="filterForm" onsubmit="event.preventDefault(); fetchProducts();" class="flex flex-wrap gap-3 items-center">
+
+                <!-- Search -->
+                <div class="relative flex-1 min-w-[200px]">
+                    <input type="text" id="searchInput" placeholder="Search products..."
+                           oninput="shopDebounce()"
+                           class="w-full bg-white border border-slate-300 text-slate-800 placeholder-slate-400 rounded-lg py-2.5 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
                 </div>
 
-                <!-- Sort Select -->
-                <div class="relative min-w-[150px]">
-                    <select id="sortSelect" onchange="fetchProducts()" class="w-full appearance-none bg-gray-800 text-white text-sm rounded-lg pl-9 pr-8 py-2.5 border border-gray-700 outline-none focus:border-blue-500 cursor-pointer hover:bg-gray-700 transition">
+                <!-- Category -->
+                <div class="relative min-w-[160px]">
+                    <select id="catSelect" onchange="fetchProducts()"
+                            class="w-full appearance-none bg-white border border-slate-300 text-slate-700 text-sm rounded-lg pl-9 pr-8 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer transition">
+                        <option value="">All Categories</option>
+                        <optgroup label="Main Types">
+                            <option value="physical">Physical Items</option>
+                            <option value="digital">Digital Goods</option>
+                        </optgroup>
+                        <?php if (!empty($categories)): ?>
+                        <optgroup label="Specific Categories">
+                            <?php foreach ($categories as $c): ?>
+                            <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['name']) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                        <?php endif; ?>
+                    </select>
+                    <i class="fa-solid fa-layer-group absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                    <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none"></i>
+                </div>
+
+                <!-- Sort -->
+                <div class="relative min-w-[165px]">
+                    <select id="sortSelect" onchange="fetchProducts()"
+                            class="w-full appearance-none bg-white border border-slate-300 text-slate-700 text-sm rounded-lg pl-9 pr-8 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer transition">
                         <option value="newest">Newest First</option>
                         <option value="price_asc">Price: Low to High</option>
                         <option value="price_desc">Price: High to Low</option>
-                        <option value="name_asc">Name: A-Z</option>
+                        <option value="name_asc">Name: A–Z</option>
                     </select>
-                    <i class="fa-solid fa-arrow-up-wide-short absolute left-3 top-3 text-gray-400 text-xs pointer-events-none"></i>
-                    <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-gray-500 text-[10px] pointer-events-none"></i>
+                    <i class="fa-solid fa-arrow-up-wide-short absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                    <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none"></i>
                 </div>
 
-                <!-- Reset Button -->
-                <button type="button" onclick="resetFilters()" class="bg-red-500/10 text-red-400 text-sm rounded-lg px-4 py-2.5 border border-red-500/20 whitespace-nowrap hover:bg-red-500 hover:text-white transition flex items-center gap-2">
-                    <i class="fa-solid fa-xmark"></i> Clear
+                <!-- Clear -->
+                <button type="button" onclick="shopResetFilters()"
+                        class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-400 text-sm font-medium transition whitespace-nowrap">
+                    <i class="fa-solid fa-xmark text-xs"></i> Clear
                 </button>
-            </div>
-        </form>
-    </div>
-
-    <!-- 2. PRODUCT GRID CONTAINER -->
-    <div id="productGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <!-- Products will be injected here by JS -->
-    </div>
-
-    <!-- Loading State -->
-    <div id="loading" class="hidden text-center py-20">
-        <i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-500"></i>
-    </div>
-
-    <!-- No Results State -->
-    <div id="noResults" class="hidden text-center py-20">
-        <div class="bg-gray-800 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <i class="fa-solid fa-magnifying-glass text-3xl text-gray-500"></i>
+            </form>
         </div>
-        <h3 class="text-xl font-bold text-white">No products found</h3>
-        <p class="text-gray-400 text-sm mt-2">Try adjusting your search or filters.</p>
     </div>
 
-    <!-- DEVELOPER CREDIT -->
-    <div class="mt-12 text-center pb-8 border-t border-white/5 pt-8">
-        <p class="text-[10px] text-gray-600 uppercase tracking-widest">
-            Developed By 
-            <a href="https://areativedigital.com/" target="_blank" class="text-gray-500 hover:text-blue-400 transition font-bold">Areative</a>
-        </p>
-    </div>
+    <?php /* ── Product Grid ────────────────────────────────────── */ ?>
+    <div class="max-w-7xl mx-auto px-4 py-8">
 
+        <!-- Loading -->
+        <div id="shopLoading" class="hidden py-24 flex justify-center">
+            <i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-500"></i>
+        </div>
+
+        <!-- No Results -->
+        <div id="shopNoResults" class="hidden py-24 text-center">
+            <div class="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-magnifying-glass text-3xl text-slate-400"></i>
+            </div>
+            <h3 class="text-xl font-bold text-slate-700">No products found</h3>
+            <p class="text-slate-400 text-sm mt-2">Try adjusting your search or filters.</p>
+        </div>
+
+        <!-- Grid -->
+        <div id="productGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <?php if (!empty($products)): ?>
+                <?php foreach ($products as $p): ?>
+                    <?= shopRenderCard($p) ?>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
+    </div>
 </div>
 
 <script>
-    let debounceTimer;
+(function () {
+    let shopDebounceTimer;
 
-    function debounceSearch() {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(fetchProducts, 300); 
-    }
+    window.shopDebounce = function () {
+        clearTimeout(shopDebounceTimer);
+        shopDebounceTimer = setTimeout(fetchProducts, 300);
+    };
 
-    function resetFilters() {
+    window.shopResetFilters = function () {
         document.getElementById('searchInput').value = '';
-        document.getElementById('catSelect').value = '';
-        document.getElementById('sortSelect').value = 'newest';
+        document.getElementById('catSelect').value   = '';
+        document.getElementById('sortSelect').value  = 'newest';
         fetchProducts();
-    }
+    };
 
-    async function fetchProducts() {
-        const q = document.getElementById('searchInput').value;
-        const cat = document.getElementById('catSelect').value;
+    window.fetchProducts = async function () {
+        const q    = document.getElementById('searchInput').value;
+        const cat  = document.getElementById('catSelect').value;
         const sort = document.getElementById('sortSelect').value;
-        
-        const grid = document.getElementById('productGrid');
-        const loading = document.getElementById('loading');
-        const noResults = document.getElementById('noResults');
+
+        const grid      = document.getElementById('productGrid');
+        const loading   = document.getElementById('shopLoading');
+        const noResults = document.getElementById('shopNoResults');
 
         grid.innerHTML = '';
         loading.classList.remove('hidden');
         noResults.classList.add('hidden');
 
         try {
-            const response = await fetch(`/api/shop/search?q=${encodeURIComponent(q)}&cat=${encodeURIComponent(cat)}&sort=${encodeURIComponent(sort)}`);
-            const data = await response.json();
+            const res  = await fetch(`/api/shop/search?q=${encodeURIComponent(q)}&cat=${encodeURIComponent(cat)}&sort=${encodeURIComponent(sort)}`);
+            const data = await res.json();
 
             loading.classList.add('hidden');
 
-            if (data.products.length === 0) {
+            if (!data.products || data.products.length === 0) {
                 noResults.classList.remove('hidden');
                 return;
             }
 
             data.products.forEach(p => {
-                const stockStatus = p.type === 'physical' 
-                    ? `<div class="text-[10px] mb-2 ${p.stock > 0 ? 'text-green-400' : 'text-red-400'} flex items-center gap-1"><i class="fa-solid fa-circle text-[6px]"></i> ${p.stock > 0 ? 'In Stock: ' + p.stock : 'Out of Stock'}</div>`
-                    : `<div class="text-[10px] mb-2 text-blue-400 flex items-center gap-1"><i class="fa-solid fa-bolt text-[8px]"></i> Instant Download</div>`;
+                const isDigital = p.type === 'digital';
 
-                // --- CHANGE IS HERE: Updated label to PHYSICAL PRODUCT ---
-                const typeBadge = p.type === 'digital' 
-                    ? `<div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1"><i class="fa-solid fa-download text-[9px] text-blue-400"></i> DIGITAL</div>`
-                    : `<div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1"><i class="fa-solid fa-box text-[9px] text-yellow-400"></i> PHYSICAL PRODUCT</div>`;
+                const typeCls   = isDigital ? 'background:#dbeafe;color:#1d4ed8' : 'background:#f1f5f9;color:#475569';
+                const typeLabel = isDigital ? 'DIGITAL' : 'PHYSICAL';
 
-                // Uses global addToCart
-                const actionBtn = (p.type === 'physical' && p.stock <= 0)
-                    ? `<button disabled class="bg-gray-700 text-gray-500 p-2 rounded-lg cursor-not-allowed z-20 relative"><i class="fa-solid fa-ban"></i></button>`
-                    : `<button onclick="event.preventDefault(); addToCart(this)" 
-                        data-id="${p.id}" 
-                        data-name="${p.name.replace(/"/g, '&quot;')}" 
-                        data-price="${p.price}" 
-                        data-image="${p.image}" 
-                        data-type="${p.type}" 
-                        data-stock="${p.stock}"
-                        class="bg-blue-600 hover:bg-blue-500 text-white w-8 h-8 flex items-center justify-center rounded-lg shadow-lg shadow-blue-600/20 active:scale-90 transition z-20 relative"><i class="fa-solid fa-cart-plus"></i></button>`;
+                const imgHtml = p.image
+                    ? `<img src="/${p.image}" alt="${escHtml(p.name)}"
+                           class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                           loading="lazy" decoding="async">`
+                    : `<div class="w-full h-full flex items-center justify-center bg-slate-100">
+                           <i class="fa-regular fa-image text-4xl text-slate-300"></i>
+                       </div>`;
 
-                const imageHtml = p.image 
-                    ? `<img src="/${p.image}" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" loading="lazy" decoding="async">`
-                    : `<div class="w-full h-full flex items-center justify-center text-gray-600 flex-col gap-2"><i class="fa-regular fa-image text-2xl"></i><span class="text-xs">No Image</span></div>`;
+                const stockHtml = isDigital
+                    ? `<span class="inline-flex items-center gap-1 text-xs text-blue-600 font-medium">
+                           <i class="fa-solid fa-bolt" style="font-size:10px"></i> Instant Delivery
+                       </span>`
+                    : (p.stock > 0
+                        ? `<span class="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                               <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981"></span> In Stock
+                           </span>`
+                        : `<span class="inline-flex items-center gap-1 text-xs text-rose-500 font-medium">
+                               <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#f87171"></span> Out of Stock
+                           </span>`);
 
-                // --- DISCOUNT LOGIC ---
-                let priceHtml = '';
-                let discountBadge = '';
-
-                if (p.has_discount) {
-                    priceHtml = `
-                        <div class="flex flex-col leading-tight">
-                            <span class="text-[10px] text-gray-400 line-through">${parseInt(p.original_price).toLocaleString()} Ks</span>
-                            <span class="text-yellow-400 font-bold text-sm">${parseInt(p.price).toLocaleString()} Ks</span>
-                        </div>
-                    `;
-                    discountBadge = `
-                        <div class="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg z-10 animate-pulse">
-                            -${p.discount_percent}%
-                        </div>
-                    `;
+                let priceHtml, discountBadge = '';
+                if (p.has_discount && p.original_price && p.discount_percent > 0) {
+                    priceHtml = `<div class="flex items-baseline gap-1.5">
+                        <span class="text-base font-bold text-blue-600">${parseInt(p.price).toLocaleString()} Ks</span>
+                        <span class="text-xs text-slate-400 line-through">${parseInt(p.original_price).toLocaleString()} Ks</span>
+                    </div>`;
+                    discountBadge = `<span class="absolute top-2 left-2 bg-rose-500 text-white z-10"
+                        style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px">
+                        -${p.discount_percent}%
+                    </span>`;
                 } else {
-                    priceHtml = `<span class="text-yellow-400 font-bold text-sm">${parseInt(p.price).toLocaleString()} Ks</span>`;
+                    priceHtml = `<span class="text-base font-bold text-blue-600">${parseInt(p.price).toLocaleString()} Ks</span>`;
                 }
 
-                const cardHtml = `
-                    <div class="bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-blue-500/50 transition group flex flex-col relative hover:-translate-y-1 hover:shadow-xl duration-300">
-                        <a href="/product?id=${p.id}" class="absolute inset-0 z-10"></a>
-                        <div class="aspect-square bg-gray-800 relative overflow-hidden">
-                            ${imageHtml}
-                            ${typeBadge}
-                            ${discountBadge}
-                        </div>
-                        <div class="p-3 flex flex-col flex-grow relative pointer-events-none">
-                            <h3 class="text-white font-bold text-sm truncate mb-1">${p.name}</h3>
-                            ${stockStatus}
-                            <div class="mt-auto flex items-center justify-between pointer-events-auto">
-                                ${priceHtml}
-                                ${actionBtn}
-                            </div>
+                const outOfStock = !isDigital && p.stock <= 0;
+                const cartBtn = outOfStock
+                    ? `<button disabled
+                           class="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg text-sm font-semibold cursor-not-allowed z-20 relative"
+                           style="background:#e2e8f0;color:#94a3b8">
+                           <i class="fa-solid fa-ban" style="font-size:11px"></i> Out of Stock
+                       </button>`
+                    : `<button onclick="event.preventDefault(); addToCart(this)"
+                           data-id="${p.id}"
+                           data-name="${escHtml(p.name)}"
+                           data-price="${p.price}"
+                           data-image="${escHtml(p.image ?? '')}"
+                           data-type="${p.type}"
+                           data-stock="${p.stock}"
+                           class="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-sm font-semibold transition-all duration-150 z-20 relative">
+                           <i class="fa-solid fa-cart-plus" style="font-size:11px"></i> Add to Cart
+                       </button>`;
+
+                const card = `
+                <div class="bg-white rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 overflow-hidden flex flex-col group relative border border-slate-100">
+                    <a href="/product?id=${p.id}" class="absolute inset-0 z-10" aria-label="${escHtml(p.name)}"></a>
+                    <div class="aspect-square overflow-hidden bg-slate-50 relative">
+                        ${imgHtml}
+                        ${discountBadge}
+                        <span class="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-md z-10" style="${typeCls}">${typeLabel}</span>
+                    </div>
+                    <div class="p-3 flex flex-col flex-grow gap-2">
+                        <h3 class="text-slate-800 font-semibold text-sm leading-snug line-clamp-2">${escHtml(p.name)}</h3>
+                        ${stockHtml}
+                        <div class="mt-auto pt-2 border-t border-slate-100 flex flex-col gap-2 pointer-events-auto">
+                            ${priceHtml}
+                            ${cartBtn}
                         </div>
                     </div>
-                `;
-                grid.insertAdjacentHTML('beforeend', cardHtml);
+                </div>`;
+                grid.insertAdjacentHTML('beforeend', card);
             });
 
-        } catch (error) {
-            console.error('Error fetching products:', error);
+        } catch (err) {
+            console.error('Shop fetch error:', err);
             loading.classList.add('hidden');
         }
+    };
+
+    function escHtml(str) {
+        return String(str ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
     document.addEventListener('DOMContentLoaded', fetchProducts);
+}());
 </script>
