@@ -86,6 +86,7 @@
 
 <?php
     $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '/';
+    $siteSettings = $siteSettings ?? [];
     $siteName = $siteSettings['site_name'] ?? 'Store';
     $phone    = $siteSettings['phone']     ?? '';
     $address  = $siteSettings['address']   ?? '';

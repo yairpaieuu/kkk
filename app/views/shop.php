@@ -1,4 +1,6 @@
 <?php
+    $pageSections = $pageSections ?? [];
+    $siteSettings = $siteSettings ?? [];
     $shopHeader = $pageSections['page_header'] ?? null;
     $showHeader = $shopHeader && isset($shopHeader['is_visible']) && (int)$shopHeader['is_visible'] === 1;
     $headerTitle   = $showHeader ? (htmlspecialchars($shopHeader['title']   ?? 'Our Products')) : 'Our Products';

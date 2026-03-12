@@ -3,6 +3,8 @@
         $s = $sections[$key] ?? null;
         return $s && isset($s['is_visible']) && (int)$s['is_visible'] === 1;
     }
+    $pageSections = $pageSections ?? [];
+    $siteSettings = $siteSettings ?? [];
 
     function contactSettings(array $sections, string $key): array {
         $s = $sections[$key] ?? null;

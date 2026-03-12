@@ -1,5 +1,6 @@
 <?php
     /* ── helpers ──────────────────────────────────────────────── */
+    $pageSections = $pageSections ?? [];
     $heroSection     = $pageSections['hero']              ?? null;
     $promoSection    = $pageSections['promo_strip']       ?? null;
     $featSection     = $pageSections['featured_products'] ?? null;
