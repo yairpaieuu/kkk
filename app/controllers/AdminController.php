@@ -1423,6 +1423,12 @@ if (!class_exists('AdminController')) {
             $this->checkPermission(['admin', 'sales']);
             $message = "";
 
+            // Ensure columns added after initial schema creation exist
+            try { $this->db->query("SELECT usage_count FROM coupons LIMIT 1"); }
+            catch (Exception $e) { $this->db->exec("ALTER TABLE coupons ADD COLUMN usage_count INT DEFAULT 0"); }
+            try { $this->db->query("SELECT is_active FROM coupons LIMIT 1"); }
+            catch (Exception $e) { $this->db->exec("ALTER TABLE coupons ADD COLUMN is_active TINYINT(1) DEFAULT 1"); }
+
             if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     if (isset($_POST['add_coupon'])) {

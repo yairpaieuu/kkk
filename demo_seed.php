@@ -527,6 +527,8 @@ run($db, "CREATE TABLE coupons (
     min_spend DECIMAL(12,2) DEFAULT 0.00,
     tier_data JSON DEFAULT NULL,
     usage_limit INT DEFAULT NULL,
+    usage_count INT DEFAULT 0,
+    is_active TINYINT(1) DEFAULT 1,
     start_date DATE DEFAULT NULL,
     end_date DATE DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
