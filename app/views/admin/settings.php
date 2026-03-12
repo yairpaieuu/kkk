@@ -59,7 +59,7 @@
             <?php if (!empty($banners)): ?>
                 <?php foreach ($banners as $b): ?>
                     <div class="relative group rounded-lg overflow-hidden border border-gray-700">
-                        <img src="/<?= $b['image_path'] ?>" class="w-full h-32 object-cover">
+                        <img src="<?= imgSrc($b['image_path']) ?>" class="w-full h-32 object-cover">
                         <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                             <form action="/admin/banner/delete" method="POST" onsubmit="return confirm('Delete this banner?');">
                                 <input type="hidden" name="id" value="<?= $b['id'] ?>">

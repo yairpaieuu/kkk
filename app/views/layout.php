@@ -128,6 +128,18 @@
     function mobileNavClass(string $path, string $uri): string {
         return $uri === $path ? 'text-blue-600' : 'text-slate-500';
     }
+    /**
+     * Returns a valid <img src> value for both local paths (uploads/…)
+     * and external URLs (https://…).
+     */
+    if (!function_exists('imgSrc')) {
+        function imgSrc(?string $path): string {
+            if (empty($path)) return '';
+            return (str_starts_with($path, 'http://') || str_starts_with($path, 'https://'))
+                ? htmlspecialchars($path, ENT_QUOTES | ENT_SUBSTITUTE)
+                : '/' . htmlspecialchars($path, ENT_QUOTES | ENT_SUBSTITUTE);
+        }
+    }
 ?>
 
     <!-- ============================================================ -->
@@ -500,6 +512,12 @@
     <!-- JAVASCRIPT                                                    -->
     <!-- ============================================================ -->
     <script>
+        /* ── Image src helper — handles both local paths and external URLs ── */
+        function imgSrc(path) {
+            if (!path) return '';
+            return /^https?:\/\//.test(path) ? path : '/' + path;
+        }
+
         /* ── Announcement bar dismiss ─────────────────────────────── */
         function dismissAnnouncement() {
             const bar    = document.getElementById('desk-ann-bar');

@@ -275,7 +275,7 @@
                     itemsHtml += `
                         <div class="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
                             <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 bg-gray-700 rounded bg-cover bg-center" style="background-image:url('/${i.image || 'assets/placeholder.png'}')"></div>
+                                <div class="w-8 h-8 bg-gray-700 rounded bg-cover bg-center" style="background-image:url('${imgSrc(i.image || 'assets/placeholder.png')}')"></div>
                                 <div>
                                     <div class="text-sm font-bold text-white">${i.product_name}</div>
                                     <div class="text-xs text-gray-500">Qty: ${i.quantity}</div>

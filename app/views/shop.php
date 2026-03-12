@@ -13,7 +13,7 @@
     function shopRenderCard(array $p): string {
         $id        = (int)$p['id'];
         $name      = htmlspecialchars($p['name']         ?? '');
-        $image     = htmlspecialchars($p['image']        ?? '');
+        $image     = $p['image'] ?? '';
         $type      = htmlspecialchars($p['type']         ?? 'physical');
         $price     = (float)($p['price']                 ?? 0);
         $stock     = (int)($p['stock']                   ?? 0);
@@ -23,7 +23,7 @@
         $typeLabel = $isDigital ? 'Digital' : 'Physical';
 
         $imgHtml = $image
-            ? '<img src="/' . $image . '" alt="' . $name . '"
+            ? '<img src="' . imgSrc($image) . '" alt="' . $name . '"
                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                    loading="lazy" decoding="async">'
             : '<div class="w-full h-full flex items-center justify-center bg-slate-100">
@@ -71,7 +71,7 @@
                 data-id="'    . $id    . '"
                 data-name="'  . $name  . '"
                 data-price="' . $price . '"
-                data-image="' . $image . '"
+                data-image="' . htmlspecialchars($image, ENT_QUOTES) . '"
                 data-type="'  . $type  . '"
                 data-stock="' . $stock . '"
                 class="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-semibold transition-all duration-150 z-20 relative">
@@ -526,7 +526,7 @@
         const typeLabel  = isDigital ? 'Digital' : 'Physical';
 
         const imgHtml = p.image
-            ? `<img src="/${escHtml(p.image)}" alt="${escHtml(p.name)}"
+            ? `<img src="${imgSrc(p.image)}" alt="${escHtml(p.name)}"
                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                    loading="lazy" decoding="async">`
             : `<div class="w-full h-full flex items-center justify-center bg-slate-100">

@@ -22,7 +22,7 @@ function renderProductCard(array $p): string {
     $typeCls   = $isDigital ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600';
 
     if (!empty($p['image'])) {
-        $img = '<img src="/' . htmlspecialchars($p['image']) . '"
+        $img = '<img src="' . imgSrc($p['image']) . '"
                      class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                      alt="' . htmlspecialchars($p['name']) . '" loading="lazy" decoding="async">';
     } else {
@@ -135,7 +135,7 @@ $heroSubtitle = $heroSection['content'] ?? 'Discover top-quality items handpicke
                 <?php if (!empty($banner['link_url'])): ?>
                 <a href="<?= htmlspecialchars($banner['link_url']) ?>" class="block w-full h-full">
                 <?php endif; ?>
-                    <img src="/<?= htmlspecialchars($banner['image_path']) ?>"
+                    <img src="<?= imgSrc($banner['image_path']) ?>"
                          class="w-full h-full object-cover object-center"
                          alt="Banner" loading="eager" fetchpriority="high">
                 <?php if (!empty($banner['link_url'])): ?>

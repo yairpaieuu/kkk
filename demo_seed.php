@@ -627,48 +627,38 @@ foreach ($db->query("SELECT id, name FROM categories")->fetchAll() as $row) {
 ok(count($categories) . ' categories inserted');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  6. GENERATE DEMO IMAGES  (PHP GD — saves to uploads/)
+//  6. PRODUCT IMAGES  (real photos via Unsplash CDN — no download needed)
 // ─────────────────────────────────────────────────────────────────────────────
-step('Generating product images with GD…');
+step('Assigning real product images from Unsplash CDN…');
 
-// Remove stale demo images from a previous run
-$stale = glob(UPLOADS_DIR . 'demo_product_*.{webp,png}', GLOB_BRACE) ?: [];
-foreach ($stale as $sf) { @unlink($sf); }
-
-// [name, bgTop, bgBot, accent, icon]
-$imgSpecs = [
+// Curated Unsplash photo URLs — 600×600 crop, auto-format WebP, quality 80
+// These are stable public CDN URLs that never expire and serve optimised images.
+$productImages = [
     // Earphones
-    ['Beats Solo Wireless Headphone',   [26,26,46],    [46,20,70],    [233,69,96],    'earphone'],
-    ['Sony WH-1000XM5 ANC',            [18,22,50],    [30,35,80],    [52,152,219],   'earphone'],
-    ['Apple AirPods Pro (2nd Gen)',     [220,220,230], [190,190,210], [0,0,0],        'earphone'],
-    ['JBL Tune 510BT',                  [15,100,180],  [8,60,140],    [255,165,0],    'earphone'],
+    'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop&auto=format&q=80', // Beats headphones
+    'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=600&h=600&fit=crop&auto=format&q=80', // Sony over-ear ANC
+    'https://images.unsplash.com/photo-1603351154351-5e2d0600bb77?w=600&h=600&fit=crop&auto=format&q=80', // AirPods Pro
+    'https://images.unsplash.com/photo-1484704849700-f032a568e944?w=600&h=600&fit=crop&auto=format&q=80', // JBL colourful headphones
     // Wearables
-    ['Smart Watch Pro X3',              [160,100,10],  [90,55,5],     [255,200,0],    'watch'],
-    ['Amazfit GTR 4',                   [28,28,50],    [15,15,35],    [200,170,100],  'watch'],
+    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&h=600&fit=crop&auto=format&q=80', // Premium watch
+    'https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?w=600&h=600&fit=crop&auto=format&q=80', // Amazfit-style smartwatch
     // Laptops
-    ['Dell XPS 15 Laptop',              [25,45,75],    [10,25,50],    [52,152,219],   'laptop'],
-    ['MacBook Air M2',                  [195,195,210], [160,160,180], [80,80,95],     'laptop'],
-    ['ASUS VivoBook 15',                [15,15,25],    [30,30,50],    [100,200,100],  'laptop'],
+    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=600&h=600&fit=crop&auto=format&q=80', // Dell XPS open laptop
+    'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600&h=600&fit=crop&auto=format&q=80', // MacBook silver
+    'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=600&h=600&fit=crop&auto=format&q=80', // ASUS VivoBook on desk
     // Gaming
-    ['PlayStation 5 Console',           [210,215,230], [175,180,205], [0,70,200],     'gamepad'],
-    ['Xbox Series X',                   [10,90,10],    [5,55,5],      [255,255,255],  'gamepad'],
+    'https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?w=600&h=600&fit=crop&auto=format&q=80', // PS5 DualSense controller
+    'https://images.unsplash.com/photo-1621259182978-fbf93132d53d?w=600&h=600&fit=crop&auto=format&q=80', // Xbox Series controller
     // VR & AR
-    ['Meta Quest 3',                    [230,230,235], [195,195,210], [50,50,60],     'vr'],
+    'https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?w=600&h=600&fit=crop&auto=format&q=80', // VR headset
     // Smart Speakers
-    ['Amazon Echo (4th Gen)',           [45,48,55],    [28,30,38],    [52,152,219],   'speaker'],
-    ['Sonos One SL',                    [18,18,18],    [45,45,45],    [200,50,50],    'speaker'],
+    'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=600&h=600&fit=crop&auto=format&q=80', // Amazon Echo smart speaker
+    'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=600&h=600&fit=crop&auto=format&q=80', // Sonos One speaker
     // Digital Products
-    ['Adobe Creative Cloud 1-Year License', [200,40,40],   [140,15,15],   [255,150,0],    'ebook'],
-    ['Tech Productivity Bundle eBook',  [40,110,70],   [18,65,35],    [255,220,0],    'ebook'],
+    'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=600&h=600&fit=crop&auto=format&q=80', // Creative/design tools
+    'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&h=600&fit=crop&auto=format&q=80', // eBook / books
 ];
-
-$productImages = [];
-foreach ($imgSpecs as $spec) {
-    [$pname, $bgTop, $bgBot, $accent, $icon] = $spec;
-    $path = makeProductImage($pname, $bgTop, $bgBot, $accent, $icon);
-    $productImages[] = $path;
-    ok('Product image: ' . ($path ?? 'SKIPPED (no GD)'));
-}
+ok(count($productImages) . ' Unsplash product image URLs assigned');
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  7. PRODUCTS  (16 demo products)
@@ -842,33 +832,33 @@ $db->exec("INSERT INTO suppliers (name, phone, email, address) VALUES
 ok('3 suppliers inserted');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  14. BANNERS  (GD-generated hero images)
+//  14. BANNERS  (real hero photos via Unsplash CDN)
 // ─────────────────────────────────────────────────────────────────────────────
-step('Generating and seeding banner images…');
+step('Seeding banner images from Unsplash CDN…');
 
-// Remove stale demo banner images
+// Remove stale GD-generated demo banners from older runs
 $staleBanners = glob(UPLOADS_DIR . 'demo_banner_*.{webp,png}', GLOB_BRACE) ?: [];
 foreach ($staleBanners as $sf) { @unlink($sf); }
 
+// Curated wide hero photos — 1400×500, auto-format WebP, quality 85
 $bannerSpecs = [
-    ['SUMMER SALE — UP TO 30% OFF',  'Shop headphones, laptops & gaming gear',
-     'SHOP THE SALE', [180, 20, 20],  [100, 10, 10],  'demo_banner_1.webp', '/shop'],
-    ['NEW ARRIVALS — JUST LANDED',   'Explore the latest wearables, VR & speakers',
-     'VIEW NEW IN',   [15,  80, 160], [8,  40, 100],  'demo_banner_2.webp', '/shop'],
-    ['FREE SHIPPING ON 50,000+ KS',  'Use code DEMO10 for an extra 10% off today',
-     'GET THE DEAL',  [15,  110, 75], [8,  60, 40],   'demo_banner_3.webp', '/shop'],
+    [
+        'image_path' => 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1400&h=500&fit=crop&auto=format&q=85',
+        'link_url'   => '/shop',
+    ],
+    [
+        'image_path' => 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=1400&h=500&fit=crop&auto=format&q=85',
+        'link_url'   => '/shop',
+    ],
+    [
+        'image_path' => 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=1400&h=500&fit=crop&auto=format&q=85',
+        'link_url'   => '/shop',
+    ],
 ];
-
 $banStmt = $db->prepare("INSERT INTO banners (image_path, link_url) VALUES (?, ?)");
 foreach ($bannerSpecs as $b) {
-    [$headline, $sub, $cta, $left, $right, $fname, $link] = $b;
-    $path = makeBannerImage($headline, $sub, $cta, $left, $right, $fname);
-    if ($path) {
-        $banStmt->execute([$path, $link]);
-        ok('Banner inserted: ' . $path);
-    } else {
-        err('Banner skipped (GD unavailable)');
-    }
+    $banStmt->execute([$b['image_path'], $b['link_url']]);
+    ok('Banner inserted: ' . $b['image_path']);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -947,7 +937,15 @@ ok('3 contact messages inserted');
 // ─────────────────────────────────────────────────────────────────────────────
 $totalOk  = count(array_filter($log, fn($l) => $l[0] === 'ok'));
 $totalErr = count(array_filter($log, fn($l) => $l[0] === 'err'));
-$genImages = count(array_filter($productImages));
+$genImages = count($productImages);
+
+// Reusable HTML img src helper for the success page (same logic as view helpers)
+function seederImgSrc(string $path): string {
+    if (empty($path)) return '';
+    return (str_starts_with($path, 'http://') || str_starts_with($path, 'https://'))
+        ? htmlspecialchars($path, ENT_QUOTES)
+        : '/' . htmlspecialchars($path, ENT_QUOTES);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1049,7 +1047,7 @@ summary:hover { color: #1e293b; }
     <div class="check-grid">
       <?php foreach ([
         '7 categories', '16 products (14 physical + 2 digital)',
-        $genImages . ' product images (GD)', '3 hero banners (GD)',
+        $genImages . ' product photos (Unsplash)', '3 hero banners (Unsplash)',
         '4 users', '4 delivery methods',
         '4 payment methods', '4 coupon codes',
         '2 promotions', '3 sample orders',
@@ -1062,17 +1060,18 @@ summary:hover { color: #1e293b; }
   </div>
 
   <!-- Product image thumbnails -->
-  <?php
-  $thumbPaths = array_filter($productImages);
-  if ($thumbPaths): ?>
+  <?php if (!empty($productImages)): ?>
   <div class="section">
-    <h2>🖼 Generated Product Images</h2>
+    <h2>🖼 Real Product Photos (Unsplash)</h2>
     <div class="thumb-grid">
-      <?php foreach ($thumbPaths as $i => $tp): ?>
+      <?php
+      $productNames = array_column($products, 0);
+      foreach ($productImages as $i => $tp): ?>
       <div class="thumb">
-        <img src="/<?= htmlspecialchars($tp) ?>"
-             alt="<?= htmlspecialchars($products[$i][0] ?? 'Product') ?>"
-             title="<?= htmlspecialchars($products[$i][0] ?? 'Product') ?>">
+        <img src="<?= seederImgSrc($tp) ?>"
+             alt="<?= htmlspecialchars($productNames[$i] ?? 'Product') ?>"
+             title="<?= htmlspecialchars($productNames[$i] ?? 'Product') ?>"
+             loading="lazy">
       </div>
       <?php endforeach; ?>
     </div>
@@ -1084,10 +1083,10 @@ summary:hover { color: #1e293b; }
   $bannerPaths = $db->query("SELECT image_path FROM banners ORDER BY id ASC")->fetchAll(PDO::FETCH_COLUMN);
   if ($bannerPaths): ?>
   <div class="section">
-    <h2>🎨 Generated Banner Images</h2>
+    <h2>🎨 Real Hero Banners (Unsplash)</h2>
     <div class="banner-grid">
       <?php foreach ($bannerPaths as $bp): ?>
-      <div><img src="/<?= htmlspecialchars($bp) ?>" alt="Banner"></div>
+      <div><img src="<?= seederImgSrc($bp) ?>" alt="Banner" loading="lazy"></div>
       <?php endforeach; ?>
     </div>
   </div>

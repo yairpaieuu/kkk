@@ -1,3 +1,14 @@
+<?php
+// Image src helper — handles both local paths (uploads/…) and external URLs (https://…)
+if (!function_exists('imgSrc')) {
+    function imgSrc(?string $path): string {
+        if (empty($path)) return '';
+        return (str_starts_with($path, 'http://') || str_starts_with($path, 'https://'))
+            ? htmlspecialchars($path, ENT_QUOTES | ENT_SUBSTITUTE)
+            : '/' . htmlspecialchars($path, ENT_QUOTES | ENT_SUBSTITUTE);
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -103,5 +114,12 @@
         </main>
     </div>
 
+    <script>
+        /* imgSrc — shared JS helper for local & external image URLs */
+        function imgSrc(path) {
+            if (!path) return '';
+            return /^https?:\/\//.test(path) ? path : '/' + path;
+        }
+    </script>
 </body>
 </html>

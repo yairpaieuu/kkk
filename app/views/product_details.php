@@ -9,6 +9,15 @@ function isVideo($path) {
     $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
     return in_array($ext, ['mp4', 'webm', 'ogg', 'mov']);
 }
+// Returns a valid img src for both local uploads paths and external URLs
+if (!function_exists('imgSrc')) {
+    function imgSrc(?string $path): string {
+        if (empty($path)) return '';
+        return (str_starts_with($path, 'http://') || str_starts_with($path, 'https://'))
+            ? htmlspecialchars($path, ENT_QUOTES | ENT_SUBSTITUTE)
+            : '/' . htmlspecialchars($path, ENT_QUOTES | ENT_SUBSTITUTE);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -20,7 +29,7 @@ function isVideo($path) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <meta property="og:title" content="<?= htmlspecialchars($product['name']) ?>" />
-    <meta property="og:image" content="<?= $currentUrl ?>/../<?= $product['image'] ?>" />
+    <meta property="og:image" content="<?= htmlspecialchars(!empty($product['image']) ? imgSrc($product['image']) : '') ?>" />
     <meta property="og:description" content="<?= number_format($product['price']) ?> MMK" />
 </head>
 <body class="bg-[#0f172a] text-white font-sans min-h-screen">
@@ -60,13 +69,13 @@ function isVideo($path) {
                 <div class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
                     <?php foreach($allMedia as $index => $media): ?>
                         <?php $isVid = isVideo($media); ?>
-                        <button onclick="renderMainMedia('/<?= $media ?>')" 
+                        <button onclick="renderMainMedia('<?= imgSrc($media) ?>')" 
                                 class="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border border-white/10 hover:border-blue-500 transition relative">
                             <?php if($isVid): ?>
-                                <video src="/<?= $media ?>" class="w-full h-full object-cover"></video>
+                                <video src="<?= imgSrc($media) ?>" class="w-full h-full object-cover"></video>
                                 <div class="absolute inset-0 flex items-center justify-center bg-black/40"><i class="fa-solid fa-play text-white text-xs"></i></div>
                             <?php else: ?>
-                                <img src="/<?= $media ?>" class="w-full h-full object-cover" loading="lazy" decoding="async">
+                                <img src="<?= imgSrc($media) ?>" class="w-full h-full object-cover" loading="lazy" decoding="async">
                             <?php endif; ?>
                         </button>
                     <?php endforeach; ?>
@@ -193,7 +202,7 @@ function isVideo($path) {
                 <span class="absolute inset-0 z-10"></span>
                 <div class="aspect-square overflow-hidden relative bg-gray-900">
                     <?php if($rec['image']): ?>
-                        <img src="/<?= htmlspecialchars($rec['image']) ?>" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" loading="lazy" decoding="async">
+                        <img src="<?= imgSrc($rec['image']) ?>" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" loading="lazy" decoding="async">
                     <?php else: ?>
                         <div class="w-full h-full flex items-center justify-center text-gray-600 text-xs">No Image</div>
                     <?php endif; ?>
@@ -269,7 +278,7 @@ function isVideo($path) {
         function openLightbox(src) { document.getElementById('lightboxImage').src = src; document.getElementById('lightboxModal').classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
         function closeLightbox() { document.getElementById('lightboxModal').classList.add('hidden'); document.getElementById('lightboxImage').src = ''; document.body.style.overflow = ''; }
 
-        const initialMedia = product.image ? '/' + product.image : null;
+        const initialMedia = product.image ? ((/^https?:\/\//.test(product.image)) ? product.image : '/' + product.image) : null;
         if(initialMedia) renderMainMedia(initialMedia); else document.getElementById('mainMediaContainer').innerHTML = '<div class="text-gray-500">No Image</div>';
 
         function updateQty(change) {
