@@ -49,14 +49,14 @@
             border-radius: 9999px;
         }
 
-        /* Search overlay slide-down */
-        #search-overlay {
+        /* Search overlay slide-down (mobile only) */
+        #mobile-search-overlay {
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.3s ease, opacity 0.3s ease;
             opacity: 0;
         }
-        #search-overlay.open {
+        #mobile-search-overlay.open {
             max-height: 80px;
             opacity: 1;
         }
@@ -73,12 +73,42 @@
         .mobile-bottom-nav {
             background: #ffffff;
             border-top: 1px solid #e2e8f0;
-            box-shadow: 0 -1px 6px rgba(0,0,0,0.06);
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+        }
+
+        /* Mobile bottom nav active pill */
+        .mobile-nav-pill {
+            display: inline-block;
+            width: 28px;
+            height: 3px;
+            background-color: #2563eb;
+            border-radius: 9999px;
+            margin-top: 3px;
         }
 
         /* Cart FAB border matches page bg */
         .cart-fab {
             border: 4px solid #f8fafc;
+        }
+
+        /* Announcement bar transition */
+        .ann-bar { transition: height 0.2s ease, padding 0.2s ease; overflow: hidden; }
+
+        /* Header search bar */
+        .header-search {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 9999px;
+            padding: 0.5rem 1rem 0.5rem 2.5rem;
+            font-size: 0.875rem;
+            outline: none;
+            width: 280px;
+            transition: all 0.2s;
+        }
+        .header-search:focus {
+            background: white;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
         }
     </style>
 </head>
@@ -101,10 +131,34 @@
 ?>
 
     <!-- ============================================================ -->
+    <!-- 📢  ANNOUNCEMENT BAR  (desktop only)                         -->
+    <!-- ============================================================ -->
+    <div class="ann-bar hidden md:block bg-blue-700 text-white text-xs text-center relative" style="padding:8px 48px;">
+        🚚 Free shipping on orders above 50,000 Ks &nbsp;|&nbsp; 📦 Quality Guaranteed
+        <button onclick="this.parentElement.style.display='none'"
+                aria-label="Dismiss announcement"
+                class="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition text-base leading-none">
+            &times;
+        </button>
+    </div>
+
+
+    <!-- ============================================================ -->
     <!-- 🖥️  DESKTOP HEADER  (hidden on mobile)                       -->
     <!-- ============================================================ -->
     <header class="hidden md:flex flex-col fixed top-0 w-full z-50 site-header">
-        <div class="max-w-7xl mx-auto w-full px-6 h-16 flex items-center justify-between">
+
+        <!-- Announcement bar inside fixed header so it scrolls with sticky offset -->
+        <div class="ann-bar bg-blue-700 text-white text-xs text-center relative" style="padding:8px 48px;" id="desk-ann-bar">
+            🚚 Free shipping on orders above 50,000 Ks &nbsp;|&nbsp; 📦 Quality Guaranteed
+            <button onclick="document.getElementById('desk-ann-bar').style.display='none'; document.getElementById('desk-ann-spacer').style.display='none';"
+                    aria-label="Dismiss announcement"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition text-base leading-none">
+                &times;
+            </button>
+        </div>
+
+        <div class="max-w-7xl mx-auto w-full px-6 h-16 flex items-center justify-between gap-6">
 
             <!-- Logo -->
             <a href="/" class="flex items-center gap-2.5 group flex-shrink-0">
@@ -118,6 +172,13 @@
                 </div>
             </a>
 
+            <!-- Inline Search Bar (desktop) -->
+            <form action="/shop" method="get" class="relative flex-shrink-0">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                <input type="text" name="q" placeholder="Search products…" class="header-search"
+                       value="<?= htmlspecialchars($_GET['q'] ?? '') ?>">
+            </form>
+
             <!-- Center Nav -->
             <nav class="flex items-center gap-7">
                 <a href="/" class="<?= navClass('/', $uri) ?> pb-0.5 relative">Home</a>
@@ -126,13 +187,7 @@
             </nav>
 
             <!-- Right Actions -->
-            <div class="flex items-center gap-2">
-
-                <!-- Search -->
-                <button onclick="toggleSearch()" aria-label="Search"
-                        class="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition">
-                    <i class="fa-solid fa-magnifying-glass text-sm"></i>
-                </button>
+            <div class="flex items-center gap-2 flex-shrink-0">
 
                 <!-- Profile -->
                 <a href="/profile" aria-label="Profile"
@@ -153,23 +208,10 @@
                 </a>
             </div>
         </div>
-
-        <!-- Search Slide-Down -->
-        <div id="search-overlay" class="w-full bg-white border-t border-slate-100">
-            <form action="/shop" method="get" class="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3">
-                <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
-                <input id="search-input" type="text" name="q" placeholder="Search products…"
-                       class="flex-grow outline-none text-sm text-slate-800 placeholder-slate-400 bg-transparent">
-                <button type="submit" class="text-slate-500 hover:text-blue-600 transition text-sm font-medium">Search</button>
-                <button type="button" onclick="toggleSearch()" class="text-slate-400 hover:text-slate-600 transition">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </form>
-        </div>
     </header>
 
-    <!-- Spacer for fixed desktop header -->
-    <div class="hidden md:block" style="height:64px;"></div>
+    <!-- Spacer for fixed desktop header (announcement ~33px + header 64px) -->
+    <div class="hidden md:block" id="desk-ann-spacer" style="height:97px;"></div>
 
 
     <!-- ============================================================ -->
@@ -202,7 +244,7 @@
         </div>
 
         <!-- Mobile Search Slide-Down -->
-        <div id="search-overlay" class="w-full bg-white border-t border-slate-100 md:hidden">
+        <div id="mobile-search-overlay" class="w-full bg-white border-t border-slate-100">
             <form action="/shop" method="get" class="px-4 py-2.5 flex items-center gap-3">
                 <i class="fa-solid fa-magnifying-glass text-slate-400 text-sm"></i>
                 <input id="search-input-mobile" type="text" name="q" placeholder="Search products…"
@@ -219,6 +261,31 @@
 
 
     <!-- ============================================================ -->
+    <!-- ✅  TRUST BADGES STRIP  (desktop only, after spacer)         -->
+    <!-- ============================================================ -->
+    <div class="bg-white border-b border-slate-100 py-2 hidden md:block">
+        <div class="max-w-7xl mx-auto px-6 flex items-center justify-center gap-8">
+            <div class="flex items-center gap-1.5">
+                <i class="fa-solid fa-truck-fast text-blue-600 text-xs"></i>
+                <span class="text-slate-500 text-xs font-medium">Free Shipping on 50K+ orders</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <i class="fa-solid fa-lock text-blue-600 text-xs"></i>
+                <span class="text-slate-500 text-xs font-medium">Secure Checkout</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <i class="fa-solid fa-rotate-left text-blue-600 text-xs"></i>
+                <span class="text-slate-500 text-xs font-medium">Easy Returns</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <i class="fa-solid fa-headset text-blue-600 text-xs"></i>
+                <span class="text-slate-500 text-xs font-medium">24/7 Support</span>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ============================================================ -->
     <!-- MAIN CONTENT                                                  -->
     <!-- ============================================================ -->
     <!-- Child views manage their own containers; add bottom padding   -->
@@ -232,6 +299,27 @@
     <!-- 🖥️  FOOTER  (hidden on mobile)                               -->
     <!-- ============================================================ -->
     <footer class="hidden md:block bg-slate-900 text-slate-300 mt-auto">
+
+        <!-- Newsletter strip -->
+        <div class="border-b border-slate-800">
+            <div class="max-w-7xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div>
+                    <p class="text-white font-semibold text-base">Get exclusive deals &amp; updates</p>
+                    <p class="text-slate-400 text-sm mt-0.5">Subscribe to our newsletter and never miss an offer.</p>
+                </div>
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <input type="email" placeholder="Your email address"
+                           id="newsletter-email"
+                           class="bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg px-4 py-2.5 text-sm outline-none focus:border-blue-500 transition w-full sm:w-64">
+                    <button onclick="(function(){var v=document.getElementById('newsletter-email').value.trim();if(!v){return;}alert('Thank you! You\'re now subscribed.');document.getElementById('newsletter-email').value='';})()"
+                            class="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition whitespace-nowrap">
+                        Subscribe
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4-column grid -->
         <div class="max-w-7xl mx-auto px-6 py-14">
             <div class="grid grid-cols-4 gap-10 mb-10">
 
@@ -328,24 +416,20 @@
 
             <!-- Home -->
             <a href="/" class="flex flex-col items-center justify-center flex-1 h-full gap-0.5 <?= mobileNavClass('/', $uri) ?>">
-                <div class="relative">
-                    <i class="fa-solid fa-house text-xl"></i>
-                    <?php if ($uri === '/'): ?>
-                        <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>
-                    <?php endif; ?>
-                </div>
+                <i class="fa-solid fa-house text-xl"></i>
                 <span class="text-[10px] font-medium">Home</span>
+                <?php if ($uri === '/'): ?>
+                    <span class="mobile-nav-pill"></span>
+                <?php endif; ?>
             </a>
 
             <!-- Shop -->
             <a href="/shop" class="flex flex-col items-center justify-center flex-1 h-full gap-0.5 <?= mobileNavClass('/shop', $uri) ?>">
-                <div class="relative">
-                    <i class="fa-solid fa-store text-xl"></i>
-                    <?php if ($uri === '/shop'): ?>
-                        <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>
-                    <?php endif; ?>
-                </div>
+                <i class="fa-solid fa-store text-xl"></i>
                 <span class="text-[10px] font-medium">Shop</span>
+                <?php if ($uri === '/shop'): ?>
+                    <span class="mobile-nav-pill"></span>
+                <?php endif; ?>
             </a>
 
             <!-- Cart FAB -->
@@ -361,24 +445,20 @@
 
             <!-- Profile -->
             <a href="/profile" class="flex flex-col items-center justify-center flex-1 h-full gap-0.5 <?= mobileNavClass('/profile', $uri) ?>">
-                <div class="relative">
-                    <i class="fa-solid fa-user text-xl"></i>
-                    <?php if ($uri === '/profile'): ?>
-                        <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>
-                    <?php endif; ?>
-                </div>
+                <i class="fa-solid fa-user text-xl"></i>
                 <span class="text-[10px] font-medium">Profile</span>
+                <?php if ($uri === '/profile'): ?>
+                    <span class="mobile-nav-pill"></span>
+                <?php endif; ?>
             </a>
 
             <!-- Contact -->
             <a href="/contact" class="flex flex-col items-center justify-center flex-1 h-full gap-0.5 <?= mobileNavClass('/contact', $uri) ?>">
-                <div class="relative">
-                    <i class="fa-solid fa-headset text-xl"></i>
-                    <?php if ($uri === '/contact'): ?>
-                        <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>
-                    <?php endif; ?>
-                </div>
+                <i class="fa-solid fa-headset text-xl"></i>
                 <span class="text-[10px] font-medium">Contact</span>
+                <?php if ($uri === '/contact'): ?>
+                    <span class="mobile-nav-pill"></span>
+                <?php endif; ?>
             </a>
         </div>
     </nav>
@@ -431,15 +511,14 @@
     <!-- JAVASCRIPT                                                    -->
     <!-- ============================================================ -->
     <script>
-        /* ── Search overlay ─────────────────────────────────────── */
+        /* ── Mobile search overlay ───────────────────────────────── */
         let searchOpen = false;
         function toggleSearch() {
             searchOpen = !searchOpen;
-            document.querySelectorAll('#search-overlay').forEach(el => {
-                el.classList.toggle('open', searchOpen);
-            });
+            const overlay = document.getElementById('mobile-search-overlay');
+            if (overlay) overlay.classList.toggle('open', searchOpen);
             if (searchOpen) {
-                const inp = document.getElementById('search-input') || document.getElementById('search-input-mobile');
+                const inp = document.getElementById('search-input-mobile');
                 if (inp) inp.focus();
             }
         }
