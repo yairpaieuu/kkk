@@ -2,6 +2,7 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
  *  DEMO SEEDER  —  Clears ALL data and populates the database with demo content
+ *                  including GD-generated product photos and hero banners.
  *
  *  Access:  /demo_seed.php?token=DEMO_RESET_2024
  *
@@ -30,6 +31,24 @@ if (!$db) {
     die('Could not connect to the database. Check config/database.php.');
 }
 
+// Upload directory – same as AdminController::uploadFile uses
+define('UPLOADS_DIR', __DIR__ . '/uploads/');
+if (!is_dir(UPLOADS_DIR)) {
+    mkdir(UPLOADS_DIR, 0755, true);
+}
+
+// TTF font path (DejaVu is standard on Debian/Ubuntu servers; Lato as fallback)
+$ttfCandidates = [
+    '/usr/share/fonts/truetype/lato/Lato-Bold.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+    '/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf',
+];
+define('DEMO_FONT', (function() use ($ttfCandidates) {
+    foreach ($ttfCandidates as $f) { if (file_exists($f)) return $f; }
+    return '';
+})());
+
 // Output helpers
 $log = [];
 function ok(string $msg): void  { global $log; $log[] = ['ok',  $msg]; }
@@ -45,11 +64,324 @@ function run(PDO $db, string $sql, bool $fatal = false): void {
         $msg = $e->getMessage() . ' — SQL: ' . substr($sql, 0, 80);
         err($msg);
         if ($fatal) {
-            // Re-enable FK checks before bailing out
             try { $db->exec('SET FOREIGN_KEY_CHECKS = 1'); } catch (Throwable $ignored) {}
             die('Fatal seeder error: ' . htmlspecialchars($msg));
         }
     }
+}
+
+// ── Image helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Draw centred, auto-wrapped text on a GD image using imagettftext when a
+ * TTF font is available; falls back to imagestring (built-in bitmap font).
+ *
+ * @param resource $im     GD image resource
+ * @param int      $cx     Centre-X of the text block
+ * @param int      $cy     Centre-Y of the text block
+ * @param int      $color  GD colour
+ * @param string   $text   Text to render
+ * @param int      $ptSize TTF point size (ignored for bitmap fallback)
+ * @param int      $maxW   Max pixel width before wrapping
+ */
+function gdText($im, int $cx, int $cy, int $color, string $text,
+                int $ptSize = 20, int $maxW = 500): void
+{
+    $font = DEMO_FONT;
+    if ($font && function_exists('imagettftext')) {
+        // Wrap text so each line fits inside $maxW
+        $words  = explode(' ', $text);
+        $lines  = [];
+        $cur    = '';
+        foreach ($words as $w) {
+            $test = $cur === '' ? $w : $cur . ' ' . $w;
+            $bb   = imagettfbbox($ptSize, 0, $font, $test);
+            if (($bb[2] - $bb[0]) > $maxW && $cur !== '') {
+                $lines[] = $cur;
+                $cur     = $w;
+            } else {
+                $cur = $test;
+            }
+        }
+        if ($cur !== '') $lines[] = $cur;
+
+        // Measure line height
+        $bb      = imagettfbbox($ptSize, 0, $font, 'Ag');
+        $lineH   = abs($bb[7] - $bb[1]) + (int)($ptSize * 0.3);
+        $totalH  = count($lines) * $lineH;
+        $startY  = $cy - (int)($totalH / 2) + $lineH;
+
+        foreach ($lines as $i => $ln) {
+            $bb  = imagettfbbox($ptSize, 0, $font, $ln);
+            $lW  = abs($bb[2] - $bb[0]);
+            $x   = $cx - (int)($lW / 2);
+            $y   = $startY + $i * $lineH;
+            imagettftext($im, $ptSize, 0, $x, $y, $color, $font, $ln);
+        }
+    } else {
+        // Bitmap font fallback (GD font 5)
+        $f  = 5;
+        $fW = imagefontwidth($f);
+        $fH = imagefontheight($f);
+        // Wrap at ~maxW / fontWidth chars
+        $maxChars = (int)($maxW / $fW);
+        $words    = explode(' ', $text);
+        $lines    = [];
+        $cur      = '';
+        foreach ($words as $w) {
+            $test = $cur === '' ? $w : $cur . ' ' . $w;
+            if (strlen($test) > $maxChars && $cur !== '') {
+                $lines[] = $cur;
+                $cur     = $w;
+            } else {
+                $cur = $test;
+            }
+        }
+        if ($cur !== '') $lines[] = $cur;
+
+        $totalH = count($lines) * ($fH + 4);
+        $startY = $cy - (int)($totalH / 2);
+        foreach ($lines as $i => $ln) {
+            $lW = strlen($ln) * $fW;
+            $x  = $cx - (int)($lW / 2);
+            $y  = $startY + $i * ($fH + 4);
+            imagestring($im, $f, $x, $y, $ln, $color);
+        }
+    }
+}
+
+/**
+ * Generate a 600×600 product-placeholder WebP (or PNG) via GD.
+ *
+ * @param string $name    Product display name
+ * @param array  $bgTop   RGB of gradient top
+ * @param array  $bgBot   RGB of gradient bottom
+ * @param array  $accent  RGB of accent colour (strip, ring, dot)
+ * @param string $icon    One of: earphone|watch|laptop|gamepad|vr|speaker|ebook
+ * @return string|null    Relative path like 'uploads/demo_product_xxxx.webp'
+ */
+function makeProductImage(string $name, array $bgTop, array $bgBot,
+                          array $accent, string $icon = 'dot'): ?string
+{
+    if (!extension_loaded('gd') || !function_exists('imagecreatetruecolor')) return null;
+
+    $w = 600; $h = 600;
+    $im = imagecreatetruecolor($w, $h);
+
+    // ── Vertical gradient background ─────────────────────────────────────────
+    for ($y = 0; $y < $h; $y++) {
+        $t = $y / ($h - 1);
+        $c = imagecolorallocate($im,
+            max(0, min(255, (int)($bgTop[0] + ($bgBot[0] - $bgTop[0]) * $t))),
+            max(0, min(255, (int)($bgTop[1] + ($bgBot[1] - $bgTop[1]) * $t))),
+            max(0, min(255, (int)($bgTop[2] + ($bgBot[2] - $bgTop[2]) * $t)))
+        );
+        imageline($im, 0, $y, $w - 1, $y, $c);
+    }
+
+    // ── Accent header strip ──────────────────────────────────────────────────
+    $accentC = imagecolorallocate($im, $accent[0], $accent[1], $accent[2]);
+    imagefilledrectangle($im, 0, 0, $w, 44, $accentC);
+    $white   = imagecolorallocate($im, 255, 255, 255);
+    $black   = imagecolorallocate($im, 0,   0,   0);
+    $darkGray= imagecolorallocate($im, 40,  40,  40);
+    // Small label in strip
+    $label = strtoupper(strlen($name) > 26 ? substr($name, 0, 26) . '..' : $name);
+    gdText($im, $w / 2, 22, $white, $label, 13, $w - 20);
+
+    // ── Central icon area ────────────────────────────────────────────────────
+    $cx = $w / 2; $cy = 300;
+
+    // Background circle (card)
+    $cardC = imagecolorallocate($im,
+        min(255, $bgTop[0] + 35), min(255, $bgTop[1] + 35), min(255, $bgTop[2] + 35));
+    imagefilledellipse($im, $cx, $cy, 360, 360, $cardC);
+
+    // Accent ring
+    imagesetthickness($im, 10);
+    $ringC = imagecolorallocate($im, $accent[0], $accent[1], $accent[2]);
+    imagearc($im, $cx, $cy, 330, 330, 0, 360, $ringC);
+    imagesetthickness($im, 1);
+
+    // ── Category-specific icon ───────────────────────────────────────────────
+    switch ($icon) {
+        case 'earphone':
+            // Two ear cups + headband arc
+            imagefilledellipse($im, $cx - 90, $cy, 90, 90, $accentC);
+            imagefilledellipse($im, $cx + 90, $cy, 90, 90, $accentC);
+            imagesetthickness($im, 12);
+            imagearc($im, $cx, $cy - 40, 220, 160, 190, 350, $white);
+            imagesetthickness($im, 1);
+            imagefilledellipse($im, $cx - 90, $cy, 50, 50, $white);
+            imagefilledellipse($im, $cx + 90, $cy, 50, 50, $white);
+            imagefilledellipse($im, $cx - 90, $cy, 22, 22, $accentC);
+            imagefilledellipse($im, $cx + 90, $cy, 22, 22, $accentC);
+            break;
+        case 'watch':
+            // Watch body + strap
+            imagefilledrectangle($im, $cx - 55, $cy + 100, $cx + 55, $cy + 150, $white);
+            imagefilledrectangle($im, $cx - 55, $cy - 150, $cx + 55, $cy - 100, $white);
+            imagefilledrectangle($im, $cx - 70, $cy - 100, $cx + 70, $cy + 100, $accentC);
+            imagefilledrectangle($im, $cx - 58, $cy - 88, $cx + 58, $cy + 88, $white);
+            // Clock face dot
+            imagefilledellipse($im, $cx, $cy, 20, 20, $accentC);
+            // Clock hands
+            imageline($im, $cx, $cy, $cx, $cy - 50, $accentC);
+            imageline($im, $cx, $cy, $cx + 35, $cy, $accentC);
+            break;
+        case 'laptop':
+            // Screen
+            imagefilledrectangle($im, $cx - 130, $cy - 90, $cx + 130, $cy + 20, $accentC);
+            imagefilledrectangle($im, $cx - 118, $cy - 78, $cx + 118, $cy + 10, $white);
+            // Keyboard base
+            imagefilledrectangle($im, $cx - 150, $cy + 20, $cx + 150, $cy + 50, $accentC);
+            // Keyboard keys (small squares)
+            for ($ki = 0; $ki < 8; $ki++) {
+                $kx = ($cx - 100) + $ki * 28;
+                imagefilledrectangle($im, $kx, $cy + 28, $kx + 20, $cy + 44, $white);
+            }
+            break;
+        case 'gamepad':
+            // Body
+            imagefilledellipse($im, $cx, $cy, 220, 160, $accentC);
+            // D-pad
+            imagefilledrectangle($im, $cx - 70, $cy - 20, $cx - 20, $cy + 20, $white);
+            imagefilledrectangle($im, $cx - 55, $cy - 40, $cx - 35, $cy + 40, $white);
+            // ABXY buttons
+            imagefilledellipse($im, $cx + 70,  $cy - 20, 24, 24, $white);
+            imagefilledellipse($im, $cx + 90,  $cy,      24, 24, $white);
+            imagefilledellipse($im, $cx + 70,  $cy + 20, 24, 24, $white);
+            imagefilledellipse($im, $cx + 50,  $cy,      24, 24, $white);
+            // Grips
+            imagefilledellipse($im, $cx - 80, $cy + 60, 80, 80, $accentC);
+            imagefilledellipse($im, $cx + 80, $cy + 60, 80, 80, $accentC);
+            break;
+        case 'vr':
+            // Headset body
+            imagefilledellipse($im, $cx, $cy, 260, 140, $accentC);
+            imagefilledrectangle($im, $cx - 130, $cy - 70, $cx + 130, $cy + 70, $accentC);
+            // Lenses
+            imagefilledellipse($im, $cx - 55, $cy, 90, 90, $white);
+            imagefilledellipse($im, $cx + 55, $cy, 90, 90, $white);
+            imagefilledellipse($im, $cx - 55, $cy, 60, 60, $cardC);
+            imagefilledellipse($im, $cx + 55, $cy, 60, 60, $cardC);
+            // Strap
+            imagesetthickness($im, 8);
+            imageline($im, $cx - 130, $cy, $cx - 200, $cy - 30, $white);
+            imageline($im, $cx + 130, $cy, $cx + 200, $cy - 30, $white);
+            imagesetthickness($im, 1);
+            break;
+        case 'speaker':
+            // Speaker cylinder
+            imagefilledellipse($im, $cx, $cy - 20, 180, 200, $accentC);
+            imagefilledellipse($im, $cx, $cy - 20, 120, 140, $cardC);
+            // Rings
+            imagesetthickness($im, 5);
+            imagearc($im, $cx, $cy - 20, 160, 180, 0, 360, $white);
+            imagearc($im, $cx, $cy - 20, 90, 100, 0, 360, $white);
+            imagesetthickness($im, 1);
+            // Base
+            imagefilledrectangle($im, $cx - 50, $cy + 80, $cx + 50, $cy + 95, $accentC);
+            break;
+        case 'ebook':
+            // Book pages
+            imagefilledrectangle($im, $cx - 70, $cy - 100, $cx + 80, $cy + 100, $accentC);
+            imagefilledrectangle($im, $cx - 80, $cy - 90,  $cx + 70, $cy + 90,  $white);
+            // Lines of text
+            for ($li = 0; $li < 7; $li++) {
+                $lw = ($li % 3 === 2) ? 80 : 120;
+                imagefilledrectangle($im,
+                    $cx - 50, $cy - 60 + $li * 22,
+                    $cx - 50 + $lw, $cy - 50 + $li * 22, $cardC);
+            }
+            // Ribbon bookmark
+            imagefilledrectangle($im, $cx + 40, $cy - 90, $cx + 56, $cy - 40, $accentC);
+            break;
+        default:
+            // Generic dot
+            imagefilledellipse($im, $cx, $cy, 140, 140, $white);
+            imagefilledellipse($im, $cx, $cy, 70,  70,  $accentC);
+    }
+
+    // ── Product name at bottom ───────────────────────────────────────────────
+    // Semi-dark overlay band at bottom
+    $band = imagecolorallocate($im,
+        max(0, $bgBot[0] - 20), max(0, $bgBot[1] - 20), max(0, $bgBot[2] - 20));
+    imagefilledrectangle($im, 0, $h - 110, $w, $h, $band);
+    gdText($im, $cx, $h - 60, $white, $name, 22, $w - 40);
+
+    // ── Save ─────────────────────────────────────────────────────────────────
+    $fname  = 'demo_product_' . substr(md5($name), 0, 12) . '.webp';
+    $saved  = imagewebp($im, UPLOADS_DIR . $fname, 85);
+    if (!$saved) {
+        $fname = str_replace('.webp', '.png', $fname);
+        imagepng($im, UPLOADS_DIR . $fname, 6);
+    }
+    imagedestroy($im);
+    return 'uploads/' . $fname;
+}
+
+/**
+ * Generate a 1400×450 banner WebP via GD.
+ *
+ * @param string $headline Large promo text
+ * @param string $sub      Smaller sub-text
+ * @param string $cta      Call-to-action button label
+ * @param array  $left     RGB gradient left
+ * @param array  $right    RGB gradient right
+ * @param string $fname    Output filename (without path)
+ * @return string|null     Relative path like 'uploads/demo_banner_n.webp'
+ */
+function makeBannerImage(string $headline, string $sub, string $cta,
+                         array $left, array $right, string $fname): ?string
+{
+    if (!extension_loaded('gd') || !function_exists('imagecreatetruecolor')) return null;
+
+    $w = 1400; $h = 450;
+    $im = imagecreatetruecolor($w, $h);
+
+    // ── Horizontal gradient ──────────────────────────────────────────────────
+    for ($x = 0; $x < $w; $x++) {
+        $t = $x / ($w - 1);
+        $c = imagecolorallocate($im,
+            max(0, min(255, (int)($left[0] + ($right[0] - $left[0]) * $t))),
+            max(0, min(255, (int)($left[1] + ($right[1] - $left[1]) * $t))),
+            max(0, min(255, (int)($left[2] + ($right[2] - $left[2]) * $t)))
+        );
+        imageline($im, $x, 0, $x, $h - 1, $c);
+    }
+
+    // ── Decorative circles (right side) ─────────────────────────────────────
+    $d1 = imagecolorallocate($im,
+        min(255, $right[0] + 30), min(255, $right[1] + 30), min(255, $right[2] + 30));
+    $d2 = imagecolorallocate($im,
+        min(255, $right[0] + 60), min(255, $right[1] + 60), min(255, $right[2] + 60));
+    imagefilledellipse($im, $w - 200, $h / 2, 500, 500, $d1);
+    imagefilledellipse($im, $w - 80,  $h / 2, 280, 280, $d2);
+    imagefilledellipse($im, $w - 350, $h - 60, 220, 220, $d1);
+
+    // ── Text ─────────────────────────────────────────────────────────────────
+    $white  = imagecolorallocate($im, 255, 255, 255);
+    $yellow = imagecolorallocate($im, 255, 220, 50);
+    // Headline (centred at y=160; 2-line wrap ends ≈ y=240)
+    gdText($im, 350, 160, $white, $headline, 52, 680);
+    // Accent separator line — drawn BELOW the headline, ABOVE the sub-text
+    imagefilledrectangle($im, 80, 250, 340, 255, $yellow);
+    // Sub-text
+    gdText($im, 350, 300, $yellow, $sub, 26, 620);
+    // CTA button outline
+    imagefilledrectangle($im, 80, 360, 340, 420, $white);
+    $btnC = imagecolorallocate($im, $left[0], $left[1], $left[2]);
+    gdText($im, 210, 390, $btnC, $cta, 18, 250);
+
+    // ── Save ─────────────────────────────────────────────────────────────────
+    $saved = imagewebp($im, UPLOADS_DIR . $fname, 85);
+    if (!$saved) {
+        $fname = str_replace('.webp', '.png', $fname);
+        imagepng($im, UPLOADS_DIR . $fname, 6);
+    }
+    imagedestroy($im);
+    return 'uploads/' . $fname;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -272,10 +604,10 @@ ok('Settings inserted');
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding users…');
 $users = [
-    ['admin',    'admin@phlox.store',    password_hash('admin123',   PASSWORD_DEFAULT), 'admin',    1, '+1 800 000 0001', 'Admin HQ, New York'],
-    ['john_doe', 'john@example.com',     password_hash('demo1234',   PASSWORD_DEFAULT), 'customer', 1, '+1 555 111 2222', '45 Elm St, Chicago'],
-    ['jane_lee', 'jane@example.com',     password_hash('demo1234',   PASSWORD_DEFAULT), 'customer', 1, '+1 555 333 4444', '88 Oak Ave, Los Angeles'],
-    ['sales_rep','sales@phlox.store',    password_hash('sales123',   PASSWORD_DEFAULT), 'sales',    1, '+1 555 555 6666', 'Sales Dept, New York'],
+    ['admin',    'admin@phlox.store',  password_hash('admin123', PASSWORD_DEFAULT), 'admin',    1, '+1 800 000 0001', 'Admin HQ, New York'],
+    ['john_doe', 'john@example.com',   password_hash('demo1234', PASSWORD_DEFAULT), 'customer', 1, '+1 555 111 2222', '45 Elm St, Chicago'],
+    ['jane_lee', 'jane@example.com',   password_hash('demo1234', PASSWORD_DEFAULT), 'customer', 1, '+1 555 333 4444', '88 Oak Ave, Los Angeles'],
+    ['sales_rep','sales@phlox.store',  password_hash('sales123', PASSWORD_DEFAULT), 'sales',    1, '+1 555 555 6666', 'Sales Dept, New York'],
 ];
 $uStmt = $db->prepare("INSERT INTO users (username,email,password,role,is_verified,phone,address) VALUES (?,?,?,?,?,?,?)");
 foreach ($users as $u) { $uStmt->execute($u); }
@@ -288,7 +620,6 @@ step('Seeding categories…');
 $categories = ['Earphones','Wearables','Laptops','Gaming','VR & AR','Smart Speakers','Digital Products'];
 $catStmt = $db->prepare("INSERT INTO categories (name) VALUES (?)");
 foreach ($categories as $c) { $catStmt->execute([$c]); }
-// Build category name→id map
 $catMap = [];
 foreach ($db->query("SELECT id, name FROM categories")->fetchAll() as $row) {
     $catMap[$row['name']] = (int)$row['id'];
@@ -296,182 +627,204 @@ foreach ($db->query("SELECT id, name FROM categories")->fetchAll() as $row) {
 ok(count($categories) . ' categories inserted');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  6. PRODUCTS  (16 demo products matching the design image)
+//  6. GENERATE DEMO IMAGES  (PHP GD — saves to uploads/)
+// ─────────────────────────────────────────────────────────────────────────────
+step('Generating product images with GD…');
+
+// Remove stale demo images from a previous run
+$stale = glob(UPLOADS_DIR . 'demo_product_*.{webp,png}', GLOB_BRACE) ?: [];
+foreach ($stale as $sf) { @unlink($sf); }
+
+// [name, bgTop, bgBot, accent, icon]
+$imgSpecs = [
+    // Earphones
+    ['Beats Solo Wireless Headphone',   [26,26,46],    [46,20,70],    [233,69,96],    'earphone'],
+    ['Sony WH-1000XM5 ANC',            [18,22,50],    [30,35,80],    [52,152,219],   'earphone'],
+    ['Apple AirPods Pro (2nd Gen)',     [220,220,230], [190,190,210], [0,0,0],        'earphone'],
+    ['JBL Tune 510BT',                  [15,100,180],  [8,60,140],    [255,165,0],    'earphone'],
+    // Wearables
+    ['Smart Watch Pro X3',              [160,100,10],  [90,55,5],     [255,200,0],    'watch'],
+    ['Amazfit GTR 4',                   [28,28,50],    [15,15,35],    [200,170,100],  'watch'],
+    // Laptops
+    ['Dell XPS 15 Laptop',              [25,45,75],    [10,25,50],    [52,152,219],   'laptop'],
+    ['MacBook Air M2',                  [195,195,210], [160,160,180], [80,80,95],     'laptop'],
+    ['ASUS VivoBook 15',                [15,15,25],    [30,30,50],    [100,200,100],  'laptop'],
+    // Gaming
+    ['PlayStation 5 Console',           [210,215,230], [175,180,205], [0,70,200],     'gamepad'],
+    ['Xbox Series X',                   [10,90,10],    [5,55,5],      [255,255,255],  'gamepad'],
+    // VR & AR
+    ['Meta Quest 3',                    [230,230,235], [195,195,210], [50,50,60],     'vr'],
+    // Smart Speakers
+    ['Amazon Echo (4th Gen)',           [45,48,55],    [28,30,38],    [52,152,219],   'speaker'],
+    ['Sonos One SL',                    [18,18,18],    [45,45,45],    [200,50,50],    'speaker'],
+    // Digital Products
+    ['Adobe Creative Cloud 1-Year License', [200,40,40],   [140,15,15],   [255,150,0],    'ebook'],
+    ['Tech Productivity Bundle eBook',  [40,110,70],   [18,65,35],    [255,220,0],    'ebook'],
+];
+
+$productImages = [];
+foreach ($imgSpecs as $spec) {
+    [$pname, $bgTop, $bgBot, $accent, $icon] = $spec;
+    $path = makeProductImage($pname, $bgTop, $bgBot, $accent, $icon);
+    $productImages[] = $path;
+    ok('Product image: ' . ($path ?? 'SKIPPED (no GD)'));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  7. PRODUCTS  (16 demo products)
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding products…');
 
-// [name, description, type, category, price, stock, warranty, colors, download_link, image]
+// [name, description, type, category, price, stock, warranty, colors, download_link]
 $products = [
     // Earphones
     ['Beats Solo Wireless Headphone',
      'Premium wireless headphone with deep bass and up to 40-hour battery life. Foldable design with soft ear cushions.',
-     'physical', 'Earphones', 45000, 28, '12 Months', 'Black,Red,White', null, null],
+     'physical', 'Earphones', 45000, 28, '12 Months', 'Black,Red,White', null],
     ['Sony WH-1000XM5 ANC',
      'Industry-leading noise cancellation with Dual Noise Sensor technology. Crystal clear hands-free calling.',
-     'physical', 'Earphones', 89000, 15, '12 Months', 'Black,Silver', null, null],
+     'physical', 'Earphones', 89000, 15, '12 Months', 'Black,Silver', null],
     ['Apple AirPods Pro (2nd Gen)',
      'Active Noise Cancellation, Adaptive Transparency, and Personalized Spatial Audio with dynamic head tracking.',
-     'physical', 'Earphones', 75000, 20, '12 Months', 'White', null, null],
+     'physical', 'Earphones', 75000, 20, '12 Months', 'White', null],
     ['JBL Tune 510BT',
      'Wireless on-ear headphones with 40-hour battery, foldable design, and JBL Pure Bass Sound.',
-     'physical', 'Earphones', 28000, 40, '6 Months', 'Black,Blue,White,Pink', null, null],
-
+     'physical', 'Earphones', 28000, 40, '6 Months', 'Black,Blue,White,Pink', null],
     // Wearables
     ['Smart Watch Pro X3',
      'Fitness tracker with heart rate monitor, GPS, 7-day battery, and 100+ sport modes. IP68 waterproof.',
-     'physical', 'Wearables', 35000, 22, '12 Months', 'Yellow,Black,Silver', null, null],
+     'physical', 'Wearables', 35000, 22, '12 Months', 'Yellow,Black,Silver', null],
     ['Amazfit GTR 4',
      'Premium smartwatch with Alexa built-in, dual-band GPS, and 150+ sport modes. 14-day battery life.',
-     'physical', 'Wearables', 52000, 18, '12 Months', 'Black,Brown,Gold', null, null],
-
+     'physical', 'Wearables', 52000, 18, '12 Months', 'Black,Brown,Gold', null],
     // Laptops
     ['Dell XPS 15 Laptop',
      '15.6" OLED display, Intel Core i7-13700H, 32GB RAM, 1TB SSD. The ultimate creator\'s machine.',
-     'physical', 'Laptops', 1850000, 8, '24 Months', 'Silver,Black', null, null],
+     'physical', 'Laptops', 1850000, 8, '24 Months', 'Silver,Black', null],
     ['MacBook Air M2',
      'Apple M2 chip, 13.6" Liquid Retina display, 18-hour battery, and 1080p FaceTime HD camera.',
-     'physical', 'Laptops', 1650000, 10, '12 Months', 'Space Gray,Silver,Starlight,Midnight', null, null],
+     'physical', 'Laptops', 1650000, 10, '12 Months', 'Space Gray,Silver,Starlight,Midnight', null],
     ['ASUS VivoBook 15',
      '15.6" FHD display, AMD Ryzen 5, 8GB RAM, 512GB SSD. Thin, light and powerful everyday laptop.',
-     'physical', 'Laptops', 680000, 14, '12 Months', 'Transparent Silver,Indie Black', null, null],
-
+     'physical', 'Laptops', 680000, 14, '12 Months', 'Transparent Silver,Indie Black', null],
     // Gaming
     ['PlayStation 5 Console',
      'Experience lightning-fast loading, deeper immersion with haptic feedback and 4K gaming at 120fps.',
-     'physical', 'Gaming', 950000, 5, '12 Months', 'White,Black', null, null],
+     'physical', 'Gaming', 950000, 5, '12 Months', 'White,Black', null],
     ['Xbox Series X',
      'True 4K gaming at 60fps, up to 120fps, 1TB custom NVMe SSD and ray-tracing support.',
-     'physical', 'Gaming', 880000, 7, '12 Months', 'Black', null, null],
-
+     'physical', 'Gaming', 880000, 7, '12 Months', 'Black', null],
     // VR & AR
     ['Meta Quest 3',
      'Mixed reality headset with high-res colour passthrough, powerful Snapdragon XR2 Gen 2 processor.',
-     'physical', 'VR & AR', 750000, 9, '12 Months', 'White', null, null],
-
+     'physical', 'VR & AR', 750000, 9, '12 Months', 'White', null],
     // Smart Speakers
     ['Amazon Echo (4th Gen)',
      'Premium sound with Dolby, built-in Alexa, smart home hub. Spherical design that complements any room.',
-     'physical', 'Smart Speakers', 55000, 30, '12 Months', 'Charcoal,Glacier White,Twilight Blue', null, null],
+     'physical', 'Smart Speakers', 55000, 30, '12 Months', 'Charcoal,Glacier White,Twilight Blue', null],
     ['Sonos One SL',
      'Powerful stereo sound, multi-room music, and works with Apple AirPlay 2, Spotify Connect and more.',
-     'physical', 'Smart Speakers', 125000, 16, '12 Months', 'Black,White', null, null],
-
+     'physical', 'Smart Speakers', 125000, 16, '12 Months', 'Black,White', null],
     // Digital Products
     ['Adobe Creative Cloud 1-Year License',
      'Full access to 20+ creative desktop and mobile apps including Photoshop, Illustrator, and Premiere Pro.',
-     'digital', 'Digital Products', 480000, 999, null, null, 'https://adobe.com/activate', null],
-    ['Tech Productivity Bundle (eBook)',
+     'digital', 'Digital Products', 480000, 999, null, null, 'https://adobe.com/activate'],
+    ['Tech Productivity Bundle eBook',
      'A curated collection of 5 premium eBooks covering productivity, UI/UX design, and web development.',
-     'digital', 'Digital Products', 25000, 999, null, null, 'https://example.com/ebook-bundle', null],
+     'digital', 'Digital Products', 25000, 999, null, null, 'https://example.com/ebook-bundle'],
 ];
 
 $pStmt = $db->prepare("INSERT INTO products
     (name, description, type, category_id, price, stock, warranty_period, colors, download_link, image, is_active)
     VALUES (?,?,?,?,?,?,?,?,?,?,1)");
 
-foreach ($products as $p) {
+foreach ($products as $idx => $p) {
     $catId = $catMap[$p[3]] ?? null;
     $pStmt->execute([
-        $p[0], // name
-        $p[1], // description
-        $p[2], // type
-        $catId, // category_id
-        $p[4], // price
-        $p[5], // stock
-        $p[6], // warranty_period
-        $p[7], // colors
-        $p[8], // download_link
-        $p[9], // image
+        $p[0],                          // name
+        $p[1],                          // description
+        $p[2],                          // type
+        $catId,                         // category_id
+        $p[4],                          // price
+        $p[5],                          // stock
+        $p[6],                          // warranty_period
+        $p[7],                          // colors
+        $p[8],                          // download_link
+        $productImages[$idx] ?? null,   // generated image path
     ]);
 }
-ok(count($products) . ' products inserted');
-
-// Add has_discount / original_price / discount_percent virtual display via promotion seeding
-// (The app reads promotions to show discounts on the front-end)
+ok(count($products) . ' products inserted with images');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  7. PROMOTIONS (sale badges on products)
+//  8. PROMOTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding promotions…');
-// Get product IDs for Beats & PS5 to give them a sale badge
-$beatId  = $db->query("SELECT id FROM products WHERE name LIKE 'Beats%' LIMIT 1")->fetchColumn();
-$ps5Id   = $db->query("SELECT id FROM products WHERE name LIKE 'PlayStation%' LIMIT 1")->fetchColumn();
-$echoId  = $db->query("SELECT id FROM products WHERE name LIKE 'Amazon Echo%' LIMIT 1")->fetchColumn();
+$beatId = $db->query("SELECT id FROM products WHERE name LIKE 'Beats%' LIMIT 1")->fetchColumn();
+$ps5Id  = $db->query("SELECT id FROM products WHERE name LIKE 'PlayStation%' LIMIT 1")->fetchColumn();
+$echoId = $db->query("SELECT id FROM products WHERE name LIKE 'Amazon Echo%' LIMIT 1")->fetchColumn();
 
 $promoStmt = $db->prepare("INSERT INTO promotions
     (name, type, value, requirement, start_date, end_date, is_active, applicable_products, applicable_categories)
     VALUES (?,?,?,?,?,?,?,?,?)");
-
 $promoStmt->execute(['Summer Sale 20%', 'percentage_discount', 20, 0,
     date('Y-m-d'), date('Y-m-d', strtotime('+60 days')), 1,
     json_encode([$beatId, $ps5Id, $echoId]), null]);
-
 $promoStmt->execute(['Earphone Category 10% Off', 'percentage_discount', 10, 0,
     date('Y-m-d'), date('Y-m-d', strtotime('+30 days')), 1,
     null, json_encode([$catMap['Earphones']])]);
 ok('2 promotions inserted');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  8. DELIVERY METHODS
+//  9. DELIVERY METHODS
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding delivery methods…');
 $db->exec("INSERT INTO delivery_methods (name, cost, is_active) VALUES
-    ('Standard Delivery', 3500, 1),
-    ('Express Delivery',  7500, 1),
+    ('Standard Delivery', 3500,  1),
+    ('Express Delivery',  7500,  1),
     ('Same-Day Delivery', 12000, 1),
     ('Pickup In-Store',   0,     1)");
 ok('4 delivery methods inserted');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  9. PAYMENT METHODS
+//  10. PAYMENT METHODS
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding payment methods…');
 $db->exec("INSERT INTO payment_methods (name, type, account_number, account_name, is_active) VALUES
-    ('KBZ Pay',   'checkout', '09250000001', 'Phlox Store Ltd',   1),
-    ('Wave Money', 'checkout', '09778000002', 'Phlox Store Ltd',   1),
-    ('AYA Pay',   'checkout', '09510000003', 'Phlox Store Ltd',   1),
-    ('Cash',      'pos',       NULL,          NULL,                1)");
+    ('KBZ Pay',    'checkout', '09250000001', 'Phlox Store Ltd', 1),
+    ('Wave Money', 'checkout', '09778000002', 'Phlox Store Ltd', 1),
+    ('AYA Pay',    'checkout', '09510000003', 'Phlox Store Ltd', 1),
+    ('Cash',       'pos',       NULL,          NULL,              1)");
 ok('4 payment methods inserted');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  10. COUPONS
+//  11. COUPONS
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding coupons…');
 $db->exec("INSERT INTO coupons (code, type, discount_type, value, min_spend, usage_limit, start_date, end_date) VALUES
-    ('DEMO10',   'standard', 'percentage', 10,  0,      100, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 90 DAY)),
-    ('SUMMER20', 'standard', 'percentage', 20,  50000,  50,  CURDATE(), DATE_ADD(CURDATE(), INTERVAL 60 DAY)),
-    ('SAVE5000', 'standard', 'fixed',      5000,100000, 30,  CURDATE(), DATE_ADD(CURDATE(), INTERVAL 45 DAY)),
-    ('WELCOME',  'standard', 'percentage', 15,  0,      200, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 365 DAY))");
+    ('DEMO10',   'standard', 'percentage', 10,   0,       100, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 90 DAY)),
+    ('SUMMER20', 'standard', 'percentage', 20,   50000,   50,  CURDATE(), DATE_ADD(CURDATE(), INTERVAL 60 DAY)),
+    ('SAVE5000', 'standard', 'fixed',      5000, 100000,  30,  CURDATE(), DATE_ADD(CURDATE(), INTERVAL 45 DAY)),
+    ('WELCOME',  'standard', 'percentage', 15,   0,       200, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 365 DAY))");
 ok('4 coupons inserted (DEMO10 / SUMMER20 / SAVE5000 / WELCOME)');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  11. PAGE SECTIONS  (home page builder)
+//  12. PAGE SECTIONS  (page builder)
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding page sections…');
 $sections = [
-    // Home
-    ['home','hero',
+    ['home', 'hero',
      'Beats Solo Wireless',
-     'There are many variations passages of Lorem Ipsum available, but the majority have suffered alteration.',
-     1, 10, json_encode(['cta_text'=>'Shop By Category','cta_link'=>'/shop'])],
-
-    ['home','promo_strip','Why Shop With Us','',1,20,null],
-
-    ['home','featured_products','Best Seller Products',
-     'There are many variations passages',
-     1, 30, json_encode(['limit'=>8])],
-
-    ['home','categories','Shop by Category','Find exactly what you\'re looking for.',1,40,null],
-
-    // Shop
-    ['shop','page_header','Our Products','Browse our full range of products.',1,10,null],
-
-    // Contact
-    ['contact','hero','Contact Us',"We'd love to hear from you. Reach out anytime.",1,10,null],
-    ['contact','contact_info','Get In Touch','',1,20,null],
-    ['contact','contact_form','Send Us a Message','',1,40,null],
+     'Discover premium audio, gaming, and tech products at the best prices.',
+     1, 10, json_encode(['cta_text' => 'Shop By Category', 'cta_link' => '/shop'])],
+    ['home', 'promo_strip',    'Why Shop With Us', '',  1, 20, null],
+    ['home', 'featured_products', 'Best Seller Products', 'Top picks our customers love.',
+     1, 30, json_encode(['limit' => 8])],
+    ['home', 'categories',    'Shop by Category', 'Find exactly what you\'re looking for.', 1, 40, null],
+    ['shop', 'page_header',   'Our Products',     'Browse our full range of products.',     1, 10, null],
+    ['contact', 'hero',        'Contact Us',       "We'd love to hear from you. Reach out anytime.", 1, 10, null],
+    ['contact', 'contact_info','Get In Touch',     '',                                              1, 20, null],
+    ['contact', 'contact_form','Send Us a Message','',                                              1, 40, null],
 ];
-
 $sStmt = $db->prepare("INSERT IGNORE INTO page_sections
     (page, section_key, title, content, is_visible, sort_order, settings)
     VALUES (?,?,?,?,?,?,?)");
@@ -479,7 +832,7 @@ foreach ($sections as $s) { $sStmt->execute($s); }
 ok(count($sections) . ' page sections inserted');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  12. SUPPLIERS
+//  13. SUPPLIERS
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding suppliers…');
 $db->exec("INSERT INTO suppliers (name, phone, email, address) VALUES
@@ -489,72 +842,98 @@ $db->exec("INSERT INTO suppliers (name, phone, email, address) VALUES
 ok('3 suppliers inserted');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  13. SAMPLE ORDERS
+//  14. BANNERS  (GD-generated hero images)
+// ─────────────────────────────────────────────────────────────────────────────
+step('Generating and seeding banner images…');
+
+// Remove stale demo banner images
+$staleBanners = glob(UPLOADS_DIR . 'demo_banner_*.{webp,png}', GLOB_BRACE) ?: [];
+foreach ($staleBanners as $sf) { @unlink($sf); }
+
+$bannerSpecs = [
+    ['SUMMER SALE — UP TO 30% OFF',  'Shop headphones, laptops & gaming gear',
+     'SHOP THE SALE', [180, 20, 20],  [100, 10, 10],  'demo_banner_1.webp', '/shop'],
+    ['NEW ARRIVALS — JUST LANDED',   'Explore the latest wearables, VR & speakers',
+     'VIEW NEW IN',   [15,  80, 160], [8,  40, 100],  'demo_banner_2.webp', '/shop'],
+    ['FREE SHIPPING ON 50,000+ KS',  'Use code DEMO10 for an extra 10% off today',
+     'GET THE DEAL',  [15,  110, 75], [8,  60, 40],   'demo_banner_3.webp', '/shop'],
+];
+
+$banStmt = $db->prepare("INSERT INTO banners (image_path, link_url) VALUES (?, ?)");
+foreach ($bannerSpecs as $b) {
+    [$headline, $sub, $cta, $left, $right, $fname, $link] = $b;
+    $path = makeBannerImage($headline, $sub, $cta, $left, $right, $fname);
+    if ($path) {
+        $banStmt->execute([$path, $link]);
+        ok('Banner inserted: ' . $path);
+    } else {
+        err('Banner skipped (GD unavailable)');
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  15. SAMPLE ORDERS
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding sample orders…');
 
-// Fetch IDs
-$johnId    = $db->query("SELECT id FROM users WHERE username='john_doe' LIMIT 1")->fetchColumn();
-$janeId    = $db->query("SELECT id FROM users WHERE username='jane_lee'  LIMIT 1")->fetchColumn();
-$delivId   = $db->query("SELECT id FROM delivery_methods WHERE name='Standard Delivery' LIMIT 1")->fetchColumn();
-$exprId    = $db->query("SELECT id FROM delivery_methods WHERE name='Express Delivery'  LIMIT 1")->fetchColumn();
-$kbzId     = $db->query("SELECT id FROM payment_methods  WHERE name='KBZ Pay' LIMIT 1")->fetchColumn();
-$cashId    = $db->query("SELECT id FROM payment_methods  WHERE name='Cash'    LIMIT 1")->fetchColumn();
-$beatsRow  = $db->query("SELECT id, price FROM products WHERE name LIKE 'Beats%' LIMIT 1")->fetch();
-$sonyRow   = $db->query("SELECT id, price FROM products WHERE name LIKE 'Sony%'  LIMIT 1")->fetch();
-$watchRow  = $db->query("SELECT id, price FROM products WHERE name LIKE 'Smart Watch%' LIMIT 1")->fetch();
-$adobeRow  = $db->query("SELECT id, price FROM products WHERE name LIKE 'Adobe%' LIMIT 1")->fetch();
+$johnId   = $db->query("SELECT id FROM users WHERE username='john_doe' LIMIT 1")->fetchColumn();
+$janeId   = $db->query("SELECT id FROM users WHERE username='jane_lee'  LIMIT 1")->fetchColumn();
+$delivId  = $db->query("SELECT id FROM delivery_methods WHERE name='Standard Delivery' LIMIT 1")->fetchColumn();
+$exprId   = $db->query("SELECT id FROM delivery_methods WHERE name='Express Delivery'  LIMIT 1")->fetchColumn();
+$kbzId    = $db->query("SELECT id FROM payment_methods  WHERE name='KBZ Pay' LIMIT 1")->fetchColumn();
+$cashId   = $db->query("SELECT id FROM payment_methods  WHERE name='Cash'    LIMIT 1")->fetchColumn();
+$beatsRow = $db->query("SELECT id, price FROM products WHERE name LIKE 'Beats%' LIMIT 1")->fetch();
+$sonyRow  = $db->query("SELECT id, price FROM products WHERE name LIKE 'Sony%'  LIMIT 1")->fetch();
+$watchRow = $db->query("SELECT id, price FROM products WHERE name LIKE 'Smart Watch%' LIMIT 1")->fetch();
+$adobeRow = $db->query("SELECT id, price FROM products WHERE name LIKE 'Adobe%' LIMIT 1")->fetch();
 
 // Order 1 – delivered
 $db->exec("INSERT INTO orders
-    (user_id, customer_name, customer_phone, customer_address, total_amount, shipping_cost, discount_amount,
-     delivery_method_id, payment_method_id, payment_method, status, created_at)
+    (user_id,customer_name,customer_phone,customer_address,total_amount,shipping_cost,
+     discount_amount,delivery_method_id,payment_method_id,payment_method,status,created_at)
     VALUES ({$johnId},'John Doe','+1 555 111 2222','45 Elm St, Chicago',
-    " . ($beatsRow['price']*2 + $sonyRow['price'] + 3500) . ", 3500, 0,
-    {$delivId}, {$kbzId}, 'KBZ Pay', 'delivered', DATE_SUB(NOW(), INTERVAL 10 DAY))");
+    " . ($beatsRow['price'] * 2 + $sonyRow['price'] + 3500) . ",3500,0,
+    {$delivId},{$kbzId},'KBZ Pay','delivered',DATE_SUB(NOW(),INTERVAL 10 DAY))");
 $o1 = $db->lastInsertId();
-$db->prepare("INSERT INTO order_items (order_id,product_id,quantity,price) VALUES (?,?,?,?)")
-   ->execute([$o1, $beatsRow['id'], 2, $beatsRow['price']]);
-$db->prepare("INSERT INTO order_items (order_id,product_id,quantity,price) VALUES (?,?,?,?)")
-   ->execute([$o1, $sonyRow['id'], 1, $sonyRow['price']]);
+$oi = $db->prepare("INSERT INTO order_items (order_id,product_id,quantity,price) VALUES (?,?,?,?)");
+$oi->execute([$o1, $beatsRow['id'], 2, $beatsRow['price']]);
+$oi->execute([$o1, $sonyRow['id'],  1, $sonyRow['price']]);
 
 // Order 2 – processing
 $db->exec("INSERT INTO orders
-    (user_id, customer_name, customer_phone, customer_address, total_amount, shipping_cost, discount_amount,
-     delivery_method_id, payment_method_id, payment_method, status, created_at)
+    (user_id,customer_name,customer_phone,customer_address,total_amount,shipping_cost,
+     discount_amount,delivery_method_id,payment_method_id,payment_method,status,created_at)
     VALUES ({$janeId},'Jane Lee','+1 555 333 4444','88 Oak Ave, Los Angeles',
-    " . ($watchRow['price'] + 7500) . ", 7500, 0,
-    {$exprId}, {$kbzId}, 'KBZ Pay', 'processing', DATE_SUB(NOW(), INTERVAL 2 DAY))");
+    " . ($watchRow['price'] + 7500) . ",7500,0,
+    {$exprId},{$kbzId},'KBZ Pay','processing',DATE_SUB(NOW(),INTERVAL 2 DAY))");
 $o2 = $db->lastInsertId();
-$db->prepare("INSERT INTO order_items (order_id,product_id,quantity,price) VALUES (?,?,?,?)")
-   ->execute([$o2, $watchRow['id'], 1, $watchRow['price']]);
+$oi->execute([$o2, $watchRow['id'], 1, $watchRow['price']]);
 
 // Order 3 – digital / pending
 $db->exec("INSERT INTO orders
-    (user_id, customer_name, customer_phone, customer_address, total_amount, shipping_cost, discount_amount,
-     delivery_method_id, payment_method_id, payment_method, status, created_at)
+    (user_id,customer_name,customer_phone,customer_address,total_amount,shipping_cost,
+     discount_amount,delivery_method_id,payment_method_id,payment_method,status,created_at)
     VALUES ({$johnId},'John Doe','+1 555 111 2222','45 Elm St, Chicago',
-    " . $adobeRow['price'] . ", 0, 0,
-    {$delivId}, {$cashId}, 'Cash', 'pending', NOW())");
+    " . $adobeRow['price'] . ",0,0,
+    {$delivId},{$cashId},'Cash','pending',NOW())");
 $o3 = $db->lastInsertId();
-$db->prepare("INSERT INTO order_items (order_id,product_id,quantity,price) VALUES (?,?,?,?)")
-   ->execute([$o3, $adobeRow['id'], 1, $adobeRow['price']]);
+$oi->execute([$o3, $adobeRow['id'], 1, $adobeRow['price']]);
 
 ok('3 sample orders + 4 order items inserted');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  14. SAMPLE EXPENSES
+//  16. SAMPLE EXPENSES
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding expenses…');
 $db->exec("INSERT INTO expenses (title, amount, category, date, description) VALUES
     ('Office Rent – March',  350000, 'Rent',      CURDATE(), 'Monthly office space rental'),
-    ('Electricity Bill',      45000, 'Utilities',  DATE_SUB(CURDATE(),INTERVAL 5 DAY), 'Monthly electricity'),
-    ('Packaging Materials',   28000, 'Operations', DATE_SUB(CURDATE(),INTERVAL 8 DAY), 'Boxes, tape, bubble wrap'),
-    ('Facebook Ads – Q1',    120000, 'Marketing',  DATE_SUB(CURDATE(),INTERVAL 15 DAY),'Q1 social media campaign')");
+    ('Electricity Bill',      45000, 'Utilities',  DATE_SUB(CURDATE(),INTERVAL 5 DAY),  'Monthly electricity'),
+    ('Packaging Materials',   28000, 'Operations', DATE_SUB(CURDATE(),INTERVAL 8 DAY),  'Boxes, tape, bubble wrap'),
+    ('Facebook Ads – Q1',    120000, 'Marketing',  DATE_SUB(CURDATE(),INTERVAL 15 DAY), 'Q1 social media campaign')");
 ok('4 expenses inserted');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  15. SAMPLE CONTACT MESSAGES
+//  17. SAMPLE CONTACT MESSAGES
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding contact messages…');
 $db->exec("INSERT INTO contact_messages (name, email, phone, message) VALUES
@@ -568,6 +947,7 @@ ok('3 contact messages inserted');
 // ─────────────────────────────────────────────────────────────────────────────
 $totalOk  = count(array_filter($log, fn($l) => $l[0] === 'ok'));
 $totalErr = count(array_filter($log, fn($l) => $l[0] === 'err'));
+$genImages = count(array_filter($productImages));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -575,113 +955,170 @@ $totalErr = count(array_filter($log, fn($l) => $l[0] === 'err'));
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Demo Seeder — Phlox Store</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #f1f5f9; min-height: 100vh; padding: 2.5rem 1rem; color: #1e293b; }
+.card { max-width: 860px; margin: 0 auto; background: #fff; border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.07); }
+.header { background: linear-gradient(135deg, #e11d48 0%, #9333ea 100%); padding: 2rem 2.5rem; color: #fff; }
+.header h1 { font-size: 1.75rem; font-weight: 900; }
+.header p  { font-size: .9rem; opacity: .85; margin-top: .25rem; }
+.section   { padding: 1.5rem 2.5rem; border-bottom: 1px solid #f1f5f9; }
+.section h2{ font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #64748b; margin-bottom: 1rem; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .75rem; }
+@media(max-width:600px){ .grid2,.grid3{ grid-template-columns:1fr; } }
+.cred { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 1rem; }
+.cred strong { font-size: .9rem; }
+.cred .badge { display:inline-block; font-size:.6rem; font-weight:700; padding:.1rem .4rem; border-radius:99px; background:#fee2e2; color:#b91c1c; margin-left:.4rem; text-transform:uppercase; }
+.cred p { font-size: .78rem; color: #64748b; margin-top: .3rem; }
+.chip { display:inline-flex; align-items:center; gap:.4rem; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:.35rem .7rem; font-size:.78rem; }
+.chip code { font-family:monospace; font-weight:700; color:#1d4ed8; }
+.check-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:.5rem; }
+@media(max-width:600px){ .check-grid{ grid-template-columns:1fr 1fr; } }
+.check { display:flex; align-items:center; gap:.5rem; background:#f8fafc; border-radius:8px; padding:.5rem .75rem; font-size:.78rem; }
+.check .ok { color: #22c55e; font-size: .9rem; }
+.btns { display:flex; flex-wrap:wrap; gap:.6rem; padding: 1.5rem 2.5rem; }
+.btn { display:inline-flex; align-items:center; gap:.4rem; font-weight:700; font-size:.82rem; padding:.6rem 1.4rem; border-radius:12px; text-decoration:none; border:none; cursor:pointer; }
+.btn-red   { background:#e11d48; color:#fff; }
+.btn-dark  { background:#1e293b; color:#fff; }
+.btn-blue  { background:#2563eb; color:#fff; }
+.btn-ghost { background:#fff; color:#374151; border:1px solid #d1d5db; }
+details { border-top: 1px solid #f1f5f9; }
+summary { padding: 1rem 2.5rem; font-size:.82rem; font-weight:600; color:#64748b; cursor:pointer; user-select:none; }
+summary:hover { color: #1e293b; }
+.log { background:#0f172a; border-radius:12px; padding:1rem; font-size:.7rem; font-family:monospace; max-height:20rem; overflow-y:auto; margin:0 2.5rem 1.5rem; }
+.log .s { color:#fbbf24; font-weight:700; margin-top:.5rem; display:block; }
+.log .o { color:#4ade80; display:block; }
+.log .e { color:#f87171; display:block; }
+.warn { margin: 0 2.5rem 1.5rem; background:#fff1f2; border:1px solid #fecdd3; border-radius:12px; padding:1rem; font-size:.78rem; color:#be123c; }
+.thumb-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.6rem; margin-top:.75rem; }
+@media(max-width:600px){ .thumb-grid{ grid-template-columns:repeat(2,1fr); } }
+.thumb { border-radius:8px; overflow:hidden; border:1px solid #e2e8f0; aspect-ratio:1; }
+.thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.banner-grid { display:grid; grid-template-columns:1fr; gap:.6rem; margin-top:.75rem; }
+.banner img  { width:100%; border-radius:8px; border:1px solid #e2e8f0; display:block; }
+</style>
 </head>
-<body class="bg-gray-50 min-h-screen py-10 px-4 font-sans">
-<div class="max-w-3xl mx-auto">
+<body>
+<div class="card">
 
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-rose-500 to-rose-600 px-8 py-6">
-      <h1 class="text-2xl font-black text-white">🌱 Demo Seeder Complete</h1>
-      <p class="text-rose-100 text-sm mt-1">Database cleared and populated with fresh demo data.</p>
-    </div>
-
-    <!-- Credentials card -->
-    <div class="px-8 py-6 border-b border-gray-100 bg-amber-50">
-      <h2 class="font-bold text-gray-700 mb-4 text-sm uppercase tracking-widest">🔑 Demo Login Credentials</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <?php foreach ([
-          ['Admin',      'admin@phlox.store',  'admin123',  'admin',    'All access'],
-          ['Customer 1', 'john@example.com',   'demo1234',  'customer', 'Shopping + orders'],
-          ['Customer 2', 'jane@example.com',   'demo1234',  'customer', 'Shopping + orders'],
-          ['Sales Rep',  'sales@phlox.store',  'sales123',  'sales',    'POS terminal'],
-        ] as [$role, $email, $pass, $tag, $note]): ?>
-        <div class="bg-white rounded-xl border border-amber-200 p-4">
-          <p class="font-bold text-gray-800 text-sm"><?= $role ?> <span class="ml-1 inline-block text-[10px] bg-rose-100 text-rose-600 font-bold px-1.5 py-0.5 rounded-full uppercase"><?= $tag ?></span></p>
-          <p class="text-xs text-gray-500 mt-1">📧 <?= $email ?></p>
-          <p class="text-xs text-gray-500">🔑 <?= $pass ?></p>
-          <p class="text-xs text-gray-400 mt-1 italic"><?= $note ?></p>
-        </div>
-        <?php endforeach; ?>
-      </div>
-    </div>
-
-    <!-- Coupon codes -->
-    <div class="px-8 py-5 border-b border-gray-100 bg-blue-50">
-      <h2 class="font-bold text-gray-700 mb-3 text-sm uppercase tracking-widest">🏷 Demo Coupon Codes</h2>
-      <div class="flex flex-wrap gap-2">
-        <?php foreach ([
-          ['DEMO10',   '10% off any order'],
-          ['SUMMER20', '20% off orders over 50,000 Ks'],
-          ['SAVE5000', '5,000 Ks off orders over 100,000 Ks'],
-          ['WELCOME',  '15% off – new customer'],
-        ] as [$code, $desc]): ?>
-        <div class="bg-white border border-blue-200 rounded-lg px-3 py-2">
-          <span class="font-mono font-bold text-blue-700 text-sm"><?= $code ?></span>
-          <span class="text-gray-400 text-xs ml-2"><?= $desc ?></span>
-        </div>
-        <?php endforeach; ?>
-      </div>
-    </div>
-
-    <!-- What was seeded -->
-    <div class="px-8 py-5 border-b border-gray-100">
-      <h2 class="font-bold text-gray-700 mb-3 text-sm uppercase tracking-widest">📦 What Was Seeded</h2>
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-gray-600">
-        <?php foreach ([
-          '7 categories','16 products (14 physical + 2 digital)','4 users',
-          '4 delivery methods','4 payment methods','4 coupon codes',
-          '2 promotions','3 sample orders','3 suppliers',
-          '4 expenses','3 contact messages','8 page sections',
-        ] as $item): ?>
-        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-2">
-          <span class="text-green-500">✓</span> <?= $item ?>
-        </div>
-        <?php endforeach; ?>
-      </div>
-    </div>
-
-    <!-- Action buttons -->
-    <div class="px-8 py-6 flex flex-wrap gap-3">
-      <a href="/" class="inline-flex items-center gap-2 bg-rose-500 hover:bg-rose-600 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-colors">
-        🏠 View Homepage
-      </a>
-      <a href="/shop" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-colors">
-        🛒 View Shop
-      </a>
-      <a href="/admin" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-colors">
-        ⚙️ Admin Panel
-      </a>
-      <a href="/login" class="inline-flex items-center gap-2 border border-gray-300 hover:border-gray-400 text-gray-700 font-bold px-6 py-2.5 rounded-xl text-sm transition-colors">
-        🔐 Login
-      </a>
-    </div>
-
-    <!-- Log output -->
-    <details class="border-t border-gray-100">
-      <summary class="px-8 py-4 cursor-pointer text-sm font-semibold text-gray-500 hover:text-gray-700 select-none">
-        📋 Show execution log (<?= $totalOk ?> ok, <?= $totalErr ?> errors)
-      </summary>
-      <div class="px-8 pb-6">
-        <div class="bg-gray-900 rounded-xl p-4 text-xs font-mono max-h-96 overflow-y-auto">
-          <?php foreach ($log as [$type, $msg]): ?>
-          <div class="<?= $type==='step' ? 'text-yellow-300 font-bold mt-2' : ($type==='err' ? 'text-red-400' : 'text-green-400') ?>">
-            <?= $type==='step' ? '▶ ' : ($type==='err' ? '✗ ' : '✓ ') ?><?= htmlspecialchars($msg) ?>
-          </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
-    </details>
-
-    <!-- Warning -->
-    <div class="mx-8 mb-6 bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-700">
-      <strong>⚠ Security Note:</strong> Delete or password-protect <code>demo_seed.php</code> on production servers.
-      Anyone who knows the URL and token can wipe your database.
-    </div>
-
+  <!-- Header -->
+  <div class="header">
+    <h1>🌱 Demo Seeder Complete</h1>
+    <p>Database cleared and populated with fresh demo data, product images & banners.</p>
   </div>
+
+  <!-- Credentials -->
+  <div class="section" style="background:#fffbeb">
+    <h2>🔑 Demo Login Credentials</h2>
+    <div class="grid2">
+      <?php foreach ([
+        ['Admin',      'admin@phlox.store', 'admin123', 'admin',    'Full admin access'],
+        ['Customer 1', 'john@example.com',  'demo1234', 'customer', 'Shopping + orders'],
+        ['Customer 2', 'jane@example.com',  'demo1234', 'customer', 'Shopping + orders'],
+        ['Sales Rep',  'sales@phlox.store', 'sales123', 'sales',    'POS terminal'],
+      ] as [$role, $email, $pass, $tag, $note]): ?>
+      <div class="cred">
+        <strong><?= $role ?> <span class="badge"><?= $tag ?></span></strong>
+        <p>📧 <?= $email ?></p>
+        <p>🔑 <?= $pass ?></p>
+        <p style="font-style:italic;margin-top:.2rem;color:#92400e"><?= $note ?></p>
+      </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+
+  <!-- Coupons -->
+  <div class="section" style="background:#eff6ff">
+    <h2>🏷 Demo Coupon Codes</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+      <?php foreach ([
+        ['DEMO10',   '10% off any order'],
+        ['SUMMER20', '20% off orders over 50,000 Ks'],
+        ['SAVE5000', '5,000 Ks off orders over 100,000 Ks'],
+        ['WELCOME',  '15% off — new customer'],
+      ] as [$code, $desc]): ?>
+      <div class="chip"><code><?= $code ?></code><span style="color:#64748b"><?= $desc ?></span></div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+
+  <!-- What was seeded -->
+  <div class="section">
+    <h2>📦 What Was Seeded</h2>
+    <div class="check-grid">
+      <?php foreach ([
+        '7 categories', '16 products (14 physical + 2 digital)',
+        $genImages . ' product images (GD)', '3 hero banners (GD)',
+        '4 users', '4 delivery methods',
+        '4 payment methods', '4 coupon codes',
+        '2 promotions', '3 sample orders',
+        '3 suppliers', '4 expenses',
+        '3 contact messages', '8 page sections',
+      ] as $item): ?>
+      <div class="check"><span class="ok">✓</span><?= $item ?></div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+
+  <!-- Product image thumbnails -->
+  <?php
+  $thumbPaths = array_filter($productImages);
+  if ($thumbPaths): ?>
+  <div class="section">
+    <h2>🖼 Generated Product Images</h2>
+    <div class="thumb-grid">
+      <?php foreach ($thumbPaths as $i => $tp): ?>
+      <div class="thumb">
+        <img src="/<?= htmlspecialchars($tp) ?>"
+             alt="<?= htmlspecialchars($products[$i][0] ?? 'Product') ?>"
+             title="<?= htmlspecialchars($products[$i][0] ?? 'Product') ?>">
+      </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <!-- Banner image previews -->
+  <?php
+  $bannerPaths = $db->query("SELECT image_path FROM banners ORDER BY id ASC")->fetchAll(PDO::FETCH_COLUMN);
+  if ($bannerPaths): ?>
+  <div class="section">
+    <h2>🎨 Generated Banner Images</h2>
+    <div class="banner-grid">
+      <?php foreach ($bannerPaths as $bp): ?>
+      <div><img src="/<?= htmlspecialchars($bp) ?>" alt="Banner"></div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <!-- Action buttons -->
+  <div class="btns">
+    <a href="/"      class="btn btn-red">🏠 View Homepage</a>
+    <a href="/shop"  class="btn btn-dark">🛒 View Shop</a>
+    <a href="/admin" class="btn btn-blue">⚙️ Admin Panel</a>
+    <a href="/login" class="btn btn-ghost">🔐 Login</a>
+  </div>
+
+  <!-- Execution log -->
+  <details>
+    <summary>📋 Show execution log (<?= $totalOk ?> ok, <?= $totalErr ?> errors)</summary>
+    <div class="log">
+      <?php foreach ($log as [$type, $msg]): ?>
+      <span class="<?= $type === 'step' ? 's' : ($type === 'err' ? 'e' : 'o') ?>">
+        <?= $type === 'step' ? '▶ ' : ($type === 'err' ? '✗ ' : '✓ ') ?><?= htmlspecialchars($msg) ?>
+      </span>
+      <?php endforeach; ?>
+    </div>
+  </details>
+
+  <!-- Security warning -->
+  <div class="warn">
+    <strong>⚠ Security Note:</strong> Delete or password-protect <code>demo_seed.php</code>
+    on production servers. Anyone who knows the URL and token can wipe your entire database.
+  </div>
+
 </div>
 </body>
 </html>
