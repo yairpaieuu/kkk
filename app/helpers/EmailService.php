@@ -6,7 +6,7 @@ class EmailService {
     private $port = 465; 
     private $username = 'admin@kkkledshop.com'; 
     private $password = '$Citytaxi02'; 
-    private $fromName = 'KKK LED SHOP';
+    private $fromName = 'Areative Shop';
     // ---------------------
 
     // 1. Generic Send Function
@@ -194,7 +194,7 @@ class EmailService {
                     </table>
 
                     <div style='margin-top:30px; padding-top:20px; border-top:1px solid #eee; text-align:center; font-size:12px; color:#999;'>
-                        <p>Thank you for shopping with KKK LED SHOP.</p>
+                        <p>Thank you for shopping with Areative Shop.</p>
                         <p>Need help? Contact us at {$this->username}</p>
                     </div>
                 </div>

@@ -6,7 +6,7 @@ $format = $_GET['format'] ?? 'slip';
 // $this->db is available because this file is included inside AdminController class
 $settings = $this->db->query("SELECT * FROM settings WHERE id=1")->fetch(PDO::FETCH_ASSOC);
 
-$siteName = $settings['site_name'] ?? 'KKK LED SHOP';
+$siteName = $settings['site_name'] ?? 'Areative Shop';
 $sitePhone = $settings['phone'] ?? '09-123456789';
 $siteAddress = $settings['address'] ?? 'No. 123, Digital Street, Yangon';
 

@@ -13,7 +13,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="text-gray-400 text-sm">Site Name</label>
-                        <input type="text" name="site_name" value="<?= htmlspecialchars($settings['site_name'] ?? 'KKK LED Shop') ?>" 
+                        <input type="text" name="site_name" value="<?= htmlspecialchars($settings['site_name'] ?? 'Areative Shop') ?>" 
                             class="w-full bg-gray-800 border border-gray-700 text-white p-2 rounded-lg mt-1">
                     </div>
                     <div>

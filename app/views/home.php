@@ -126,35 +126,93 @@ $heroSubtitle = $heroSection['content'] ?? 'Discover top-quality items handpicke
 ?>
 
 <?php if (!empty($banners)): ?>
-<!-- ── HERO: Swiper slider ─────────────────────────────── -->
-<section class="relative w-full overflow-hidden bg-[#ebebeb]">
-    <div class="swiper homeSwiperHero w-full h-[320px] md:h-[520px]">
+<!-- ── HERO: Swiper slider with text overlay ───────────────── -->
+<?php
+// Slide content overlay: one entry per banner (cycled if fewer entries than banners)
+$slideContent = [
+    [
+        'tag'     => 'Summer Sale — Up to 30% Off',
+        'title'   => 'Shop the Best in Electronics',
+        'sub'     => 'Headphones, laptops, smartwatches & more — all at unbeatable prices.',
+        'cta'     => 'Shop the Sale',
+        'align'   => 'left',
+    ],
+    [
+        'tag'     => 'New Arrivals',
+        'title'   => 'Just Landed — Fresh Picks',
+        'sub'     => 'Explore the latest VR headsets, smart speakers & wearables.',
+        'cta'     => 'View New In',
+        'align'   => 'center',
+    ],
+    [
+        'tag'     => 'Free Shipping',
+        'title'   => 'Free Delivery on Orders 50,000+ Ks',
+        'sub'     => 'Quality tech delivered to your door. Use code DEMO10 for 10% off.',
+        'cta'     => 'Get the Deal',
+        'align'   => 'right',
+    ],
+];
+?>
+<section class="relative w-full overflow-hidden bg-slate-900">
+    <div class="swiper homeSwiperHero w-full h-[360px] md:h-[560px]">
         <div class="swiper-wrapper">
-            <?php foreach ($banners as $banner): ?>
-            <div class="swiper-slide relative">
-                <?php if (!empty($banner['link_url'])): ?>
-                <a href="<?= htmlspecialchars($banner['link_url']) ?>" class="block w-full h-full">
-                <?php endif; ?>
-                    <img src="<?= imgSrc($banner['image_path']) ?>"
-                         class="w-full h-full object-cover object-center"
-                         alt="Banner" loading="eager" fetchpriority="high">
-                <?php if (!empty($banner['link_url'])): ?>
-                </a>
-                <?php endif; ?>
+            <?php foreach ($banners as $idx => $banner):
+                $sc = $slideContent[$idx % count($slideContent)];
+                $alignCls = $sc['align'] === 'center' ? 'items-center text-center' : ($sc['align'] === 'right' ? 'items-end text-right' : 'items-start text-left');
+            ?>
+            <div class="swiper-slide relative overflow-hidden">
+                <!-- Background image -->
+                <img src="<?= imgSrc($banner['image_path']) ?>"
+                     class="absolute inset-0 w-full h-full object-cover object-center swiper-slide-img"
+                     alt="Banner" loading="eager" fetchpriority="high">
+
+                <!-- Dark gradient overlay -->
+                <div class="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-black/20"></div>
+
+                <!-- Text content -->
+                <div class="relative z-10 h-full flex flex-col justify-center px-8 md:px-20 max-w-7xl mx-auto w-full">
+                    <div class="flex flex-col <?= $alignCls ?> max-w-xl <?= $sc['align'] === 'right' ? 'ml-auto' : ($sc['align'] === 'center' ? 'mx-auto' : '') ?>">
+                        <!-- Tag pill -->
+                        <span class="inline-block bg-blue-600 text-white text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-3 self-<?= $sc['align'] === 'center' ? 'center' : ($sc['align'] === 'right' ? 'end' : 'start') ?>">
+                            <?= htmlspecialchars($sc['tag']) ?>
+                        </span>
+
+                        <!-- Headline -->
+                        <h2 class="text-white text-3xl md:text-5xl font-black leading-tight mb-3 drop-shadow-lg">
+                            <?= htmlspecialchars($sc['title']) ?>
+                        </h2>
+
+                        <!-- Subtitle -->
+                        <p class="text-white/80 text-sm md:text-base leading-relaxed mb-6 max-w-sm <?= $sc['align'] === 'right' ? 'ml-auto' : ($sc['align'] === 'center' ? 'mx-auto' : '') ?>">
+                            <?= htmlspecialchars($sc['sub']) ?>
+                        </p>
+
+                        <!-- CTA button -->
+                        <a href="<?= htmlspecialchars($banner['link_url'] ?? '/shop') ?>"
+                           class="inline-flex items-center gap-2 bg-white text-slate-900 hover:bg-blue-600 hover:text-white font-bold text-sm px-6 py-3 rounded-full shadow-lg transition-all duration-200 hover:scale-105 self-<?= $sc['align'] === 'center' ? 'center' : ($sc['align'] === 'right' ? 'end' : 'start') ?>">
+                            <?= htmlspecialchars($sc['cta']) ?>
+                            <i class="fa-solid fa-arrow-right text-xs"></i>
+                        </a>
+                    </div>
+                </div>
             </div>
             <?php endforeach; ?>
         </div>
-        <div class="swiper-pagination !bottom-5"></div>
-        <button class="swiper-button-prev !text-slate-700 after:!text-sm !w-10 !h-10 !left-3
-                       !bg-white/80 hover:!bg-white !rounded-full !shadow-md !backdrop-blur-sm
-                       !transition-all !duration-150" aria-label="Previous"></button>
-        <button class="swiper-button-next !text-slate-700 after:!text-sm !w-10 !h-10 !right-3
-                       !bg-white/80 hover:!bg-white !rounded-full !shadow-md !backdrop-blur-sm
-                       !transition-all !duration-150" aria-label="Next"></button>
+
+        <!-- Pagination -->
+        <div class="swiper-pagination !bottom-6"></div>
+
+        <!-- Navigation arrows -->
+        <button class="swiper-button-prev !text-white after:!text-sm !w-11 !h-11 !left-4
+                       !bg-white/20 hover:!bg-white/40 !rounded-full !backdrop-blur-sm
+                       !border !border-white/20 !transition-all !duration-150" aria-label="Previous"></button>
+        <button class="swiper-button-next !text-white after:!text-sm !w-11 !h-11 !right-4
+                       !bg-white/20 hover:!bg-white/40 !rounded-full !backdrop-blur-sm
+                       !border !border-white/20 !transition-all !duration-150" aria-label="Next"></button>
     </div>
 </section>
 
-<?php else: /* ── HERO: Static (no banners) — matches sample image style ── */ ?>
+<?php else: /* ── HERO: Static (no banners) ── */ ?>
 <section class="relative overflow-hidden bg-[#ebebeb] min-h-[320px] md:min-h-[460px]">
 
     <!-- Huge watermark text -->
@@ -469,13 +527,22 @@ $featSubtitle = $featSection['content'] ?? 'There are many variations passages';
 
 <?php /* ── Swiper init ─────────────────────────────────────── */ ?>
 <?php if (!empty($banners)): ?>
+<style>
+/* Pagination bullets — white to match dark slider overlay */
+.homeSwiperHero .swiper-pagination-bullet { background: rgba(255,255,255,0.5); opacity: 1; }
+.homeSwiperHero .swiper-pagination-bullet-active { background: #fff; transform: scale(1.25); }
+/* Ken Burns zoom on active slide image */
+.homeSwiperHero .swiper-slide-img { transform: scale(1.08); transition: transform 5s ease-out; }
+.homeSwiperHero .swiper-slide-active .swiper-slide-img { transform: scale(1.0); }
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     new Swiper('.homeSwiperHero', {
         loop: true,
-        effect: 'slide',
-        speed: 700,
-        autoplay: { delay: 4500, disableOnInteraction: false },
+        effect: 'fade',
+        fadeEffect: { crossFade: true },
+        speed: 900,
+        autoplay: { delay: 5000, disableOnInteraction: false },
         pagination: { el: '.swiper-pagination', clickable: true },
         navigation: {
             nextEl: '.swiper-button-next',

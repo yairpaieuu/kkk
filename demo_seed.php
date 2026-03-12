@@ -596,7 +596,7 @@ run($db, "CREATE TABLE expenses (
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding settings…');
 $db->exec("INSERT INTO settings (site_name, phone, address, free_shipping_min)
-    VALUES ('Phlox Store', '+1 800 123 4567', '123 Commerce Street, New York, NY 10001', 50000)");
+    VALUES ('Areative Shop', '+1 800 123 4567', '123 Commerce Street, New York, NY 10001', 50000)");
 ok('Settings inserted');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -780,9 +780,9 @@ ok('4 delivery methods inserted');
 // ─────────────────────────────────────────────────────────────────────────────
 step('Seeding payment methods…');
 $db->exec("INSERT INTO payment_methods (name, type, account_number, account_name, is_active) VALUES
-    ('KBZ Pay',    'checkout', '09250000001', 'Phlox Store Ltd', 1),
-    ('Wave Money', 'checkout', '09778000002', 'Phlox Store Ltd', 1),
-    ('AYA Pay',    'checkout', '09510000003', 'Phlox Store Ltd', 1),
+    ('KBZ Pay',    'checkout', '09250000001', 'Areative Shop Ltd', 1),
+    ('Wave Money', 'checkout', '09778000002', 'Areative Shop Ltd', 1),
+    ('AYA Pay',    'checkout', '09510000003', 'Areative Shop Ltd', 1),
     ('Cash',       'pos',       NULL,          NULL,              1)");
 ok('4 payment methods inserted');
 
@@ -952,7 +952,7 @@ function seederImgSrc(string $path): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Demo Seeder — Phlox Store</title>
+<title>Demo Seeder — Areative Shop</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: system-ui, -apple-system, sans-serif; background: #f1f5f9; min-height: 100vh; padding: 2.5rem 1rem; color: #1e293b; }

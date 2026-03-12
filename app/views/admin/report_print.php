@@ -41,7 +41,7 @@
     <!-- HEADER -->
     <div class="header">
         <h1><?= ucfirst($_GET['type'] ?? 'General') ?> Report</h1>
-        <p>KKK LED SHOP - MANAGEMENT SYSTEM</p>
+        <p>AREATIVE SHOP - MANAGEMENT SYSTEM</p>
     </div>
 
     <!-- META INFO -->
@@ -193,7 +193,7 @@
     <?php endif; ?>
 
     <div class="footer">
-        &copy; <?= date('Y') ?> KKK LED Shop. All rights reserved.<br>
+        &copy; <?= date('Y') ?> Areative Shop. All rights reserved.<br>
         This is a computer-generated document. No signature is required.
     </div>
 
