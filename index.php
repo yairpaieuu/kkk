@@ -64,6 +64,14 @@ try {
             (new HomeController())->productDetails();
             break;
 
+        case '/contact':
+            (new HomeController())->contact();
+            break;
+
+        case '/api/contact':
+            (new HomeController())->submitContact();
+            break;
+
         case '/api/shop/search':
             (new HomeController())->apiSearch();
             break;
@@ -296,6 +304,16 @@ try {
         case '/admin/invoice/print':
             requireAuth();
             (new AdminController())->printInvoice();
+            break;
+
+        case '/admin/page-builder':
+            requireAuth();
+            (new AdminController())->pageBuilder();
+            break;
+
+        case '/api/page-builder/save':
+            requireAuth();
+            (new AdminController())->savePageSections();
             break;
 
         default:

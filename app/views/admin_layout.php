@@ -61,6 +61,7 @@
                 
                 ['url' => '/admin/users', 'icon' => 'fa-user-shield', 'label' => 'System Users', 'roles' => ['admin']],
                 ['url' => '/admin/checkout-settings', 'icon' => 'fa-credit-card', 'label' => 'Checkout Config', 'roles' => ['admin']],
+                ['url' => '/admin/page-builder', 'icon' => 'fa-wand-magic-sparkles', 'label' => 'Page Builder', 'roles' => ['admin']],
                 ['url' => '/admin/settings', 'icon' => 'fa-gear', 'label' => 'Settings', 'roles' => ['admin']],
             ];
 

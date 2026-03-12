@@ -38,7 +38,11 @@
             <div>
                 <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Phone</p>
                 <p class="text-slate-900 font-medium text-sm">
-                    <?= !empty($user['phone']) ? htmlspecialchars($user['phone']) : '<span class="text-slate-400 italic">Not set</span>' ?>
+                    <?php if (!empty($user['phone'])): ?>
+                        <?= htmlspecialchars($user['phone']) ?>
+                    <?php else: ?>
+                        <span class="text-slate-400 italic">Not set</span>
+                    <?php endif; ?>
                 </p>
             </div>
         </div>
@@ -50,7 +54,11 @@
             <div>
                 <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Address</p>
                 <p class="text-slate-900 font-medium text-sm">
-                    <?= !empty($user['address']) ? htmlspecialchars($user['address']) : '<span class="text-slate-400 italic">Not set</span>' ?>
+                    <?php if (!empty($user['address'])): ?>
+                        <?= htmlspecialchars($user['address']) ?>
+                    <?php else: ?>
+                        <span class="text-slate-400 italic">Not set</span>
+                    <?php endif; ?>
                 </p>
             </div>
         </div>
