@@ -930,7 +930,8 @@ if (!class_exists('AdminController')) {
                         $message = "Payment method added!"; 
                     }
                     elseif (isset($_POST['add_coupon'])) { 
-                        $this->db->prepare("INSERT INTO coupons (code, discount_amount) VALUES (?, ?)")->execute([$_POST['code'], $_POST['amount']]); 
+                        $discType = in_array($_POST['discount_type'] ?? 'fixed', ['fixed','percentage']) ? $_POST['discount_type'] : 'fixed';
+                        $this->db->prepare("INSERT INTO coupons (code, discount_type, value) VALUES (?, ?, ?)")->execute([$_POST['code'], $discType, (float)($_POST['amount'] ?? 0)]); 
                         $message = "Coupon added!"; 
                     }
                     elseif (isset($_POST['delete_item'])) { 
@@ -1422,6 +1423,12 @@ if (!class_exists('AdminController')) {
             $this->checkPermission(['admin', 'sales']);
             $message = "";
 
+            // Ensure columns added after initial schema creation exist
+            try { $this->db->query("SELECT usage_count FROM coupons LIMIT 1"); }
+            catch (Exception $e) { $this->db->exec("ALTER TABLE coupons ADD COLUMN usage_count INT DEFAULT 0"); }
+            try { $this->db->query("SELECT is_active FROM coupons LIMIT 1"); }
+            catch (Exception $e) { $this->db->exec("ALTER TABLE coupons ADD COLUMN is_active TINYINT(1) DEFAULT 1"); }
+
             if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     if (isset($_POST['add_coupon'])) {
@@ -1465,6 +1472,111 @@ if (!class_exists('AdminController')) {
             $coupons = $this->db->query("SELECT * FROM coupons ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
             $this->renderAdminView('coupons', ['coupons' => $coupons, 'message' => $message]);
         }
+
+        // --- PAGE BUILDER ---
+        public function pageBuilder() {
+            $this->checkPermission(['admin']);
+            $message = '';
+
+            // Create table and seed defaults if needed
+            $this->initPageSectionsTable();
+
+            $pages = ['home', 'shop', 'contact'];
+            $sections = [];
+            foreach ($pages as $page) {
+                $stmt = $this->db->prepare("SELECT * FROM page_sections WHERE page = ? ORDER BY sort_order ASC");
+                $stmt->execute([$page]);
+                $sections[$page] = $stmt->fetchAll();
+            }
+
+            if (isset($_GET['saved'])) {
+                $message = 'Page sections saved successfully!';
+            }
+
+            $this->renderAdminView('page_builder', ['sections' => $sections, 'message' => $message]);
+        }
+
+        public function savePageSections() {
+            header('Content-Type: application/json');
+            ob_start();
+            try {
+                $this->checkPermission(['admin']);
+                $input = json_decode(file_get_contents('php://input'), true);
+                if (!isset($input['sections']) || !is_array($input['sections'])) {
+                    ob_clean();
+                    echo json_encode(['success' => false, 'error' => 'Invalid payload']);
+                    exit;
+                }
+
+                $this->initPageSectionsTable();
+
+                foreach ($input['sections'] as $s) {
+                    $page       = $s['page'] ?? '';
+                    $sectionKey = $s['section_key'] ?? '';
+                    $title      = $s['title'] ?? '';
+                    $content    = $s['content'] ?? '';
+                    $isVisible  = (int)($s['is_visible'] ?? 1);
+                    $sortOrder  = (int)($s['sort_order'] ?? 0);
+                    $settings   = $s['settings'] ?? null;
+
+                    if (!$page || !$sectionKey) continue;
+
+                    $this->db->prepare(
+                        "INSERT INTO page_sections (page, section_key, title, content, is_visible, sort_order, settings)
+                         VALUES (?, ?, ?, ?, ?, ?, ?)
+                         ON DUPLICATE KEY UPDATE title=VALUES(title), content=VALUES(content),
+                             is_visible=VALUES(is_visible), sort_order=VALUES(sort_order), settings=VALUES(settings)"
+                    )->execute([$page, $sectionKey, $title, $content, $isVisible, $sortOrder, $settings]);
+                }
+
+                ob_clean();
+                echo json_encode(['success' => true]);
+            } catch (Throwable $e) {
+                ob_clean();
+                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            }
+            exit;
+        }
+
+        private function initPageSectionsTable() {
+            $this->db->exec("CREATE TABLE IF NOT EXISTS page_sections (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                page VARCHAR(50) NOT NULL,
+                section_key VARCHAR(100) NOT NULL,
+                title VARCHAR(255) DEFAULT '',
+                content TEXT DEFAULT '',
+                is_visible TINYINT(1) DEFAULT 1,
+                sort_order INT DEFAULT 0,
+                settings TEXT DEFAULT NULL,
+                UNIQUE KEY uq_page_section (page, section_key)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            // Seed defaults only if table is empty
+            $count = $this->db->query("SELECT COUNT(*) FROM page_sections")->fetchColumn();
+            if ($count == 0) {
+                $defaults = [
+                    // Home
+                    ['home','hero','Welcome to Our Store','Discover premium LED products and more at the best prices.',1,10, json_encode(['cta_text'=>'Shop Now','cta_link'=>'/shop'])],
+                    ['home','promo_strip','Why Shop With Us','',1,20,null],
+                    ['home','featured_products','Featured Products','',1,30, json_encode(['limit'=>8])],
+                    ['home','categories','Shop by Category','',1,40,null],
+                    // Shop
+                    ['shop','page_header','Our Products','Browse our full range of products.',1,10,null],
+                    // Contact
+                    ['contact','hero','Contact Us',"We'd love to hear from you. Reach out anytime.",1,10,null],
+                    ['contact','contact_info','Get In Touch','',1,20,null],
+                    ['contact','map','Find Us','',0,30, json_encode(['map_url'=>''])],
+                    ['contact','contact_form','Send Us a Message','',1,40,null],
+                ];
+                $stmt = $this->db->prepare(
+                    "INSERT IGNORE INTO page_sections (page, section_key, title, content, is_visible, sort_order, settings) VALUES (?,?,?,?,?,?,?)"
+                );
+                foreach ($defaults as $d) {
+                    $stmt->execute($d);
+                }
+            }
+        }
+
         // --- HELPERS & AUTH ---
 
         // Basic Authentication Check
@@ -1547,13 +1659,195 @@ if (!class_exists('AdminController')) {
             } else { echo "View not found: $viewName"; }
         }
 
+        public function bulkOptimizeImages() {
+            // Set JSON header first so any error response is also JSON-typed
+            header('Content-Type: application/json');
+            // Buffer all output so PHP warnings (display_errors=1) cannot corrupt the JSON body
+            ob_start();
+
+            try {
+                $this->checkPermission(['admin']);
+
+                if (!extension_loaded('gd') || !function_exists('imagewebp')) {
+                    ob_clean();
+                    echo json_encode(['success' => false, 'error' => 'GD extension with WebP support is not available.']);
+                    exit;
+                }
+
+                // Allow plenty of time for large image batches
+                set_time_limit(300);
+
+                $uploadDir = dirname(__DIR__) . '/../uploads/';
+                $maxDim    = 1200;
+
+                // Map EXIF image type constants to GD loader functions
+                $typeLoaders = [
+                    IMAGETYPE_JPEG => 'imagecreatefromjpeg',
+                    IMAGETYPE_PNG  => 'imagecreatefrompng',
+                    IMAGETYPE_GIF  => 'imagecreatefromgif',
+                    IMAGETYPE_BMP  => 'imagecreatefrombmp',
+                    IMAGETYPE_WEBP => null, // already WebP — skip
+                ];
+
+                $stats = ['processed' => 0, 'skipped' => 0, 'failed' => 0, 'saved_bytes' => 0];
+
+                if (!is_dir($uploadDir)) {
+                    ob_clean();
+                    echo json_encode(['success' => true, 'stats' => $stats, 'message' => 'No uploads directory found.']);
+                    exit;
+                }
+
+                $files = scandir($uploadDir);
+                foreach ($files as $fname) {
+                    if ($fname === '.' || $fname === '..') continue;
+                    $srcPath = $uploadDir . $fname;
+                    if (!is_file($srcPath)) continue;
+
+                    // Detect actual image type from file content (ignores misleading extensions)
+                    $imageType = @exif_imagetype($srcPath);
+                    if ($imageType === false || !array_key_exists($imageType, $typeLoaders)) {
+                        // Not a supported image type (video, document, etc.) — skip silently
+                        continue;
+                    }
+                    if ($imageType === IMAGETYPE_WEBP) {
+                        // Already WebP — nothing to do
+                        $stats['skipped']++;
+                        continue;
+                    }
+
+                    $oldRelative = 'uploads/' . $fname;
+                    $newFname    = pathinfo($fname, PATHINFO_FILENAME) . '.webp';
+                    $dstPath     = $uploadDir . $newFname;
+                    $newRelative = 'uploads/' . $newFname;
+
+                    // If WebP already exists, sync DB references and remove the old original
+                    if (file_exists($dstPath)) {
+                        $this->db->prepare("UPDATE products SET image=? WHERE image=?")->execute([$newRelative, $oldRelative]);
+                        $this->db->prepare("UPDATE product_images SET image_path=? WHERE image_path=?")->execute([$newRelative, $oldRelative]);
+                        $this->db->prepare("UPDATE banners SET image_path=? WHERE image_path=?")->execute([$newRelative, $oldRelative]);
+                        @unlink($srcPath);
+                        $stats['skipped']++;
+                        continue;
+                    }
+
+                    $loader = $typeLoaders[$imageType];
+                    $src    = @$loader($srcPath);
+                    if ($src === false) { $stats['failed']++; continue; }
+
+                    $origWidth  = imagesx($src);
+                    $origHeight = imagesy($src);
+
+                    if ($origWidth > $maxDim || $origHeight > $maxDim) {
+                        if ($origWidth >= $origHeight) {
+                            $newWidth  = $maxDim;
+                            $newHeight = (int) round($origHeight * ($maxDim / $origWidth));
+                        } else {
+                            $newHeight = $maxDim;
+                            $newWidth  = (int) round($origWidth * ($maxDim / $origHeight));
+                        }
+                    } else {
+                        $newWidth  = $origWidth;
+                        $newHeight = $origHeight;
+                    }
+
+                    $dst = imagecreatetruecolor($newWidth, $newHeight);
+                    imagealphablending($dst, false);
+                    imagesavealpha($dst, true);
+                    imagecopyresampled($dst, $src, 0, 0, 0, 0, $newWidth, $newHeight, $origWidth, $origHeight);
+
+                    $originalSize = filesize($srcPath);
+
+                    if (!imagewebp($dst, $dstPath, 85)) {
+                        imagedestroy($src);
+                        imagedestroy($dst);
+                        $stats['failed']++;
+                        continue;
+                    }
+                    imagedestroy($src);
+                    imagedestroy($dst);
+
+                    // Update DB references
+                    $this->db->prepare("UPDATE products SET image=? WHERE image=?")->execute([$newRelative, $oldRelative]);
+                    $this->db->prepare("UPDATE product_images SET image_path=? WHERE image_path=?")->execute([$newRelative, $oldRelative]);
+                    $this->db->prepare("UPDATE banners SET image_path=? WHERE image_path=?")->execute([$newRelative, $oldRelative]);
+
+                    $newSize = filesize($dstPath);
+                    $stats['saved_bytes'] += max(0, $originalSize - $newSize);
+
+                    // Remove original file
+                    @unlink($srcPath);
+                    $stats['processed']++;
+                }
+
+                ob_clean();
+                echo json_encode(['success' => true, 'stats' => $stats]);
+
+            } catch (Throwable $e) {
+                ob_clean();
+                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            }
+            exit;
+        }
+
         private function uploadFile($file) {
             $uploadDir = dirname(__DIR__) . '/../uploads/';
             if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
-            
-            $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-            $filename = uniqid('img_') . '.' . $ext;
-            
+
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            $videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi'];
+            $imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
+            $isImage = in_array($ext, $imageExts);
+            $isVideo = in_array($ext, $videoExts);
+
+            // Optimize and convert images to WebP using GD
+            if ($isImage && extension_loaded('gd') && function_exists('imagewebp')) {
+                $loaders = [
+                    'jpg'  => 'imagecreatefromjpeg',
+                    'jpeg' => 'imagecreatefromjpeg',
+                    'png'  => 'imagecreatefrompng',
+                    'gif'  => 'imagecreatefromgif',
+                    'bmp'  => 'imagecreatefrombmp',
+                    'webp' => 'imagecreatefromwebp',
+                ];
+                $loader = $loaders[$ext] ?? null;
+                $src = $loader ? @$loader($file['tmp_name']) : false;
+                if ($src !== false) {
+                    $origWidth  = imagesx($src);
+                    $origHeight = imagesy($src);
+                    $maxDim = 1200;
+
+                    if ($origWidth > $maxDim || $origHeight > $maxDim) {
+                        if ($origWidth >= $origHeight) {
+                            $newWidth  = $maxDim;
+                            $newHeight = (int) round($origHeight * ($maxDim / $origWidth));
+                        } else {
+                            $newHeight = $maxDim;
+                            $newWidth  = (int) round($origWidth * ($maxDim / $origHeight));
+                        }
+                    } else {
+                        $newWidth  = $origWidth;
+                        $newHeight = $origHeight;
+                    }
+
+                    $dst = imagecreatetruecolor($newWidth, $newHeight);
+                    imagealphablending($dst, false);
+                    imagesavealpha($dst, true);
+                    imagecopyresampled($dst, $src, 0, 0, 0, 0, $newWidth, $newHeight, $origWidth, $origHeight);
+
+                    $filename = uniqid('img_') . '.webp';
+                    if (imagewebp($dst, $uploadDir . $filename, 85)) {
+                        imagedestroy($src);
+                        imagedestroy($dst);
+                        return 'uploads/' . $filename;
+                    }
+                    imagedestroy($src);
+                    imagedestroy($dst);
+                }
+            }
+
+            // Fallback: save file as-is (videos or if GD processing fails)
+            $prefix = $isVideo ? 'video_' : 'file_';
+            $filename = uniqid($prefix) . '.' . $ext;
             if (move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) {
                 return 'uploads/' . $filename;
             }

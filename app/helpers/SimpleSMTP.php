@@ -4,7 +4,7 @@ class SimpleSMTP {
     private $port = 465;
     private $username = 'no-reply@yourdomain.com'; // CHANGE THIS
     private $password = 'YourEmailPassword123!';   // CHANGE THIS
-    private $fromName = 'KKK LED Shop';
+    private $fromName = 'Areative Shop';
 
     public function __construct() {
         // You can also load these from a config file if you prefer

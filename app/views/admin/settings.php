@@ -13,7 +13,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="text-gray-400 text-sm">Site Name</label>
-                        <input type="text" name="site_name" value="<?= htmlspecialchars($settings['site_name'] ?? 'KKK LED Shop') ?>" 
+                        <input type="text" name="site_name" value="<?= htmlspecialchars($settings['site_name'] ?? 'Areative Shop') ?>" 
                             class="w-full bg-gray-800 border border-gray-700 text-white p-2 rounded-lg mt-1">
                     </div>
                     <div>
@@ -59,7 +59,7 @@
             <?php if (!empty($banners)): ?>
                 <?php foreach ($banners as $b): ?>
                     <div class="relative group rounded-lg overflow-hidden border border-gray-700">
-                        <img src="/<?= $b['image_path'] ?>" class="w-full h-32 object-cover">
+                        <img src="<?= imgSrc($b['image_path']) ?>" class="w-full h-32 object-cover">
                         <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                             <form action="/admin/banner/delete" method="POST" onsubmit="return confirm('Delete this banner?');">
                                 <input type="hidden" name="id" value="<?= $b['id'] ?>">
@@ -76,7 +76,41 @@
         </div>
     </div>
 
-    <!-- 3. SECURITY SETTINGS -->
+    <!-- 3. IMAGE OPTIMIZER -->
+    <div class="glass-panel p-6 rounded-xl border border-white/10 mb-8">
+        <h3 class="text-lg font-bold text-white mb-1 border-b border-white/10 pb-2">🗜️ Bulk Image Optimizer</h3>
+        <p class="text-gray-400 text-sm mb-4">Convert all existing uploaded images (JPG, PNG, GIF, BMP) to WebP and resize them to max 1200 × 1200 px. This frees up disk space and speeds up page loading.</p>
+
+        <!-- Stats bar (hidden until run) -->
+        <div id="optimizerStats" class="hidden mb-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+            <div class="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+                <div id="statProcessed" class="text-2xl font-bold text-green-400">0</div>
+                <div class="text-xs text-gray-400 mt-1">Optimized</div>
+            </div>
+            <div class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                <div id="statSaved" class="text-2xl font-bold text-blue-400">0 KB</div>
+                <div class="text-xs text-gray-400 mt-1">Space Saved</div>
+            </div>
+            <div class="bg-gray-500/10 border border-gray-500/20 rounded-lg p-3">
+                <div id="statSkipped" class="text-2xl font-bold text-gray-400">0</div>
+                <div class="text-xs text-gray-400 mt-1">Already Optimized</div>
+            </div>
+            <div class="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                <div id="statFailed" class="text-2xl font-bold text-red-400">0</div>
+                <div class="text-xs text-gray-400 mt-1">Failed</div>
+            </div>
+        </div>
+
+        <div id="optimizerMsg" class="hidden mb-4 p-3 rounded-lg text-sm font-medium"></div>
+
+        <button id="optimizeBtn" onclick="runOptimizer()"
+            class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-6 rounded-lg shadow-lg transition flex items-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span id="optimizeBtnText">Optimize All Images Now</span>
+        </button>
+    </div>
+
+    <!-- 4. SECURITY SETTINGS -->
     <div class="glass-panel p-6 rounded-xl border border-white/10">
         <form method="POST" action="/admin/settings" class="space-y-6">
             <div>
@@ -101,4 +135,55 @@
             </div>
         </form>
     </div>
+
+<script>
+async function runOptimizer() {
+    const btn = document.getElementById('optimizeBtn');
+    const btnText = document.getElementById('optimizeBtnText');
+    const msg = document.getElementById('optimizerMsg');
+    const stats = document.getElementById('optimizerStats');
+
+    btn.disabled = true;
+    btnText.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>Optimizing...';
+    msg.className = 'hidden mb-4 p-3 rounded-lg text-sm font-medium';
+    stats.classList.add('hidden');
+
+    try {
+        const res = await fetch('/admin/images/optimize', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success) {
+            const s = data.stats;
+            document.getElementById('statProcessed').textContent = s.processed;
+            document.getElementById('statSkipped').textContent   = s.skipped;
+            document.getElementById('statFailed').textContent    = s.failed;
+            const kb = (s.saved_bytes / 1024).toFixed(1);
+            document.getElementById('statSaved').textContent = kb >= 1024
+                ? (kb / 1024).toFixed(2) + ' MB'
+                : kb + ' KB';
+
+            stats.classList.remove('hidden');
+
+            if (s.processed === 0 && s.failed === 0) {
+                msg.textContent = '✅ All images are already optimized. Nothing to do.';
+                msg.className = 'mb-4 p-3 rounded-lg text-sm font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20';
+            } else {
+                msg.textContent = `✅ Done! ${s.processed} image(s) optimized, ${(s.saved_bytes/1024).toFixed(1)} KB saved.`;
+                msg.className = 'mb-4 p-3 rounded-lg text-sm font-medium bg-green-500/10 text-green-400 border border-green-500/20';
+            }
+        } else {
+            msg.textContent = '❌ Error: ' + (data.error ?? 'Unknown error');
+            msg.className = 'mb-4 p-3 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 border border-red-500/20';
+        }
+        msg.classList.remove('hidden');
+    } catch (e) {
+        msg.textContent = '❌ Network error. Please try again.';
+        msg.className = 'mb-4 p-3 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 border border-red-500/20';
+        msg.classList.remove('hidden');
+    }
+
+    btn.disabled = false;
+    btnText.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>Run Again';
+}
+</script>
 </div>

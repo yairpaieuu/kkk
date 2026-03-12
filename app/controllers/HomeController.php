@@ -402,7 +402,89 @@ if (!class_exists('HomeController')) {
             } 
         }
 
+        // --- CONTACT PAGE ---
+        public function contact() {
+            $siteSettings = $this->getSiteSettings();
+            $pageSections = $this->getPageSections('contact');
+            $this->renderView('contact', compact('siteSettings', 'pageSections'));
+        }
+
+        // --- CONTACT FORM SUBMISSION API ---
+        public function submitContact() {
+            header('Content-Type: application/json');
+            ob_start();
+            try {
+                $input = json_decode(file_get_contents('php://input'), true) ?: [];
+                $name    = trim($input['name'] ?? '');
+                $email   = trim($input['email'] ?? '');
+                $phone   = trim($input['phone'] ?? '');
+                $message = trim($input['message'] ?? '');
+
+                if (!$name || !$email || !$message) {
+                    ob_clean();
+                    echo json_encode(['success' => false, 'message' => 'Name, email and message are required.']);
+                    exit;
+                }
+
+                // Create table if needed (idempotent - uses CREATE TABLE IF NOT EXISTS)
+                static $tableReady = false;
+                if (!$tableReady) {
+                    $this->db->exec("CREATE TABLE IF NOT EXISTS contact_messages (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL,
+                        email VARCHAR(255) NOT NULL,
+                        phone VARCHAR(50) DEFAULT '',
+                        message TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                    $tableReady = true;
+                }
+
+                $stmt = $this->db->prepare("INSERT INTO contact_messages (name, email, phone, message) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$name, $email, $phone, $message]);
+
+                ob_clean();
+                echo json_encode(['success' => true, 'message' => 'Thank you! We will get back to you soon.']);
+            } catch (Throwable $e) {
+                ob_clean();
+                echo json_encode(['success' => false, 'message' => 'Server error. Please try again.']);
+            }
+            exit;
+        }
+
+        // --- HELPERS ---
+        private function getSiteSettings(): array {
+            try {
+                $row = $this->db->query("SELECT * FROM settings WHERE id=1")->fetch();
+                return $row ?: [];
+            } catch (Throwable $e) {
+                return [];
+            }
+        }
+
+        private function getPageSections(string $page): array {
+            try {
+                $stmt = $this->db->prepare("SELECT * FROM page_sections WHERE page = ? ORDER BY sort_order ASC");
+                $stmt->execute([$page]);
+                $rows = $stmt->fetchAll();
+                $indexed = [];
+                foreach ($rows as $row) {
+                    $indexed[$row['section_key']] = $row;
+                }
+                return $indexed;
+            } catch (Throwable $e) {
+                return [];
+            }
+        }
+
         private function renderView($viewName, $data = []) {
+            // Always inject site settings and page sections so layout/views can use them
+            if (!isset($data['siteSettings'])) {
+                $data['siteSettings'] = $this->getSiteSettings();
+            }
+            if (!isset($data['pageSections'])) {
+                $data['pageSections'] = $this->getPageSections($viewName);
+            }
             extract($data);
             $childView = dirname(__DIR__) . "/views/$viewName.php";
             if(file_exists(dirname(__DIR__) . '/views/layout.php')) {

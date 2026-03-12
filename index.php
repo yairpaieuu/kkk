@@ -64,6 +64,14 @@ try {
             (new HomeController())->productDetails();
             break;
 
+        case '/contact':
+            (new HomeController())->contact();
+            break;
+
+        case '/api/contact':
+            (new HomeController())->submitContact();
+            break;
+
         case '/api/shop/search':
             (new HomeController())->apiSearch();
             break;
@@ -218,6 +226,11 @@ try {
             (new AdminController())->addBanner();
             break;
 
+        case '/admin/images/optimize':
+            requireAuth();
+            (new AdminController())->bulkOptimizeImages();
+            break;
+
         case '/admin/banner/delete':
             requireAuth();
             (new AdminController())->deleteBanner();
@@ -291,6 +304,16 @@ try {
         case '/admin/invoice/print':
             requireAuth();
             (new AdminController())->printInvoice();
+            break;
+
+        case '/admin/page-builder':
+            requireAuth();
+            (new AdminController())->pageBuilder();
+            break;
+
+        case '/api/page-builder/save':
+            requireAuth();
+            (new AdminController())->savePageSections();
             break;
 
         default:

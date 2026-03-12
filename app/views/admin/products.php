@@ -194,7 +194,7 @@
                     <tr class="border-b border-white/5 hover:bg-white/5 transition group <?= $isActive === 0 ? 'opacity-60 bg-red-500/5' : '' ?>">
                         <td class="p-4 flex items-center gap-3">
                             <?php if($p['image']): ?>
-                                <img src="/<?= $p['image'] ?>" class="w-10 h-10 rounded object-cover bg-gray-800 ring-1 ring-white/10">
+                                <img src="<?= imgSrc($p['image']) ?>" class="w-10 h-10 rounded object-cover bg-gray-800 ring-1 ring-white/10">
                             <?php else: ?>
                                 <div class="w-10 h-10 rounded bg-gray-800 flex items-center justify-center text-xs">N/A</div>
                             <?php endif; ?>
@@ -282,7 +282,7 @@
         const previewBox = document.getElementById('mainPreview');
         const previewImg = previewBox.querySelector('img');
         if (product.image) {
-            previewImg.src = "/" + product.image;
+            previewImg.src = /^https?:\/\//.test(product.image) ? product.image : "/" + product.image;
             previewBox.classList.remove('hidden');
         } else {
             previewBox.classList.add('hidden');

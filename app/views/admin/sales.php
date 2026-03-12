@@ -371,7 +371,7 @@
                             <td class="p-3">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded bg-gray-700 overflow-hidden flex-shrink-0">
-                                        ${item.image ? `<img src="/${item.image}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-[8px]">IMG</div>'}
+                                        ${item.image ? `<img src="${imgSrc(item.image)}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-[8px]">IMG</div>'}
                                     </div>
                                     <div class="font-bold text-white truncate max-w-[150px]">${item.product_name}</div>
                                 </div>

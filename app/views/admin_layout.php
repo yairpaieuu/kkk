@@ -1,9 +1,20 @@
+<?php
+// Image src helper — handles both local paths (uploads/…) and external URLs (https://…)
+if (!function_exists('imgSrc')) {
+    function imgSrc(?string $path): string {
+        if (empty($path)) return '';
+        return (str_starts_with($path, 'http://') || str_starts_with($path, 'https://'))
+            ? htmlspecialchars($path, ENT_QUOTES | ENT_SUBSTITUTE)
+            : '/' . htmlspecialchars($path, ENT_QUOTES | ENT_SUBSTITUTE);
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - Store</title>
+    <title>Admin Panel - Areative Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -61,6 +72,7 @@
                 
                 ['url' => '/admin/users', 'icon' => 'fa-user-shield', 'label' => 'System Users', 'roles' => ['admin']],
                 ['url' => '/admin/checkout-settings', 'icon' => 'fa-credit-card', 'label' => 'Checkout Config', 'roles' => ['admin']],
+                ['url' => '/admin/page-builder', 'icon' => 'fa-wand-magic-sparkles', 'label' => 'Page Builder', 'roles' => ['admin']],
                 ['url' => '/admin/settings', 'icon' => 'fa-gear', 'label' => 'Settings', 'roles' => ['admin']],
             ];
 
@@ -102,5 +114,12 @@
         </main>
     </div>
 
+    <script>
+        /* imgSrc — shared JS helper for local & external image URLs */
+        function imgSrc(path) {
+            if (!path) return '';
+            return /^https?:\/\//.test(path) ? path : '/' + path;
+        }
+    </script>
 </body>
 </html>

@@ -33,7 +33,7 @@
                     
                     <div class="aspect-square bg-gray-800 rounded-lg mb-3 overflow-hidden relative">
                         <?php if($p['image']): ?>
-                            <img src="/<?= $p['image'] ?>" class="w-full h-full object-cover">
+                            <img src="<?= imgSrc($p['image']) ?>" class="w-full h-full object-cover">
                         <?php else: ?>
                             <div class="w-full h-full flex items-center justify-center text-gray-600">
                                 <i class="fa-solid fa-box text-2xl"></i>
@@ -190,7 +190,7 @@
                 <div class="bg-[#0f172a] rounded-lg p-2 border border-gray-700 relative group flex gap-2">
                     <!-- Image -->
                     <div class="w-12 h-12 bg-gray-700 rounded overflow-hidden flex-shrink-0">
-                        ${item.image ? `<img src="/${item.image}" class="w-full h-full object-cover">` : ''}
+                        ${item.image ? `<img src="${imgSrc(item.image)}" class="w-full h-full object-cover">` : ''}
                     </div>
                     
                     <!-- Details & Inputs -->

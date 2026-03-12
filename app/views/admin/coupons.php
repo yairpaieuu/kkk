@@ -123,7 +123,7 @@
                                 <?php endif; ?>
                             </td>
                             <td class="p-3 text-xs">
-                                <?= $c['usage_count'] ?> / <?= $c['usage_limit'] == 0 ? '∞' : $c['usage_limit'] ?>
+                                <?= $c['usage_count'] ?? 0 ?> / <?= ($c['usage_limit'] ?? 0) == 0 ? '∞' : $c['usage_limit'] ?>
                             </td>
                             <td class="p-3 text-right">
                                 <form method="POST" onsubmit="return confirm('Delete this coupon?');">

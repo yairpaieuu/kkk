@@ -40,7 +40,7 @@
                     
                     <div class="aspect-square w-full bg-gray-800/50 rounded-lg mb-2 flex items-center justify-center overflow-hidden relative">
                         <?php if(!empty($p['image'])): ?>
-                            <img src="/<?= $p['image'] ?>" class="w-full h-full object-cover transition duration-300 group-hover:scale-110">
+                            <img src="<?= imgSrc($p['image']) ?>" class="w-full h-full object-cover transition duration-300 group-hover:scale-110">
                         <?php else: ?>
                             <span class="text-3xl"><?= $p['type']=='digital'?'💻':'📦' ?></span>
                         <?php endif; ?>
