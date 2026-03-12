@@ -263,11 +263,11 @@
                     <div class="flex flex-col gap-2 max-h-52 overflow-y-auto pr-1 no-scrollbar">
                         <?php foreach ($categories as $c): ?>
                         <label class="flex items-center gap-2.5 cursor-pointer group">
-                            <input type="checkbox"
-                                name="sidebarCat[]"
+                            <input type="radio"
+                                name="sidebarCat"
                                 value="<?= (int)$c['id'] ?>"
                                 onchange="fetchProducts()"
-                                class="accent-blue-600 w-4 h-4 rounded cursor-pointer">
+                                class="accent-blue-600 w-4 h-4 cursor-pointer">
                             <span class="text-sm text-slate-600 group-hover:text-slate-900 transition-colors"><?= htmlspecialchars($c['name']) ?></span>
                         </label>
                         <?php endforeach; ?>
@@ -359,9 +359,11 @@
 (function () {
     'use strict';
 
-    /* ── Shared filter state ── */
-    let activeCat  = '';   // '' | 'physical' | 'digital' | numeric string (category id)
-    let activeType = '';   // '' | 'physical' | 'digital'
+    /* ── Shared filter state ──
+     * activeFilter: '' = all | 'physical' | 'digital' | numeric string (category id)
+     * This single variable covers both product type and category filters.
+     */
+    let activeFilter = '';
     let currentView = 'grid';
     let debounceTimer;
 
@@ -370,7 +372,7 @@
         return String(str ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
-    function $(id) { return document.getElementById(id); }
+    function byId(id) { return document.getElementById(id); }
 
     /* ── Search debounce ── */
     window.shopDebounce = function () {
@@ -381,9 +383,9 @@
     /* ── View toggle ── */
     window.shopSetView = function (view) {
         currentView = view;
-        const grid  = $('productGrid');
-        const btnGrid = $('btnGrid');
-        const btnList = $('btnList');
+        const grid  = byId('productGrid');
+        const btnGrid = byId('btnGrid');
+        const btnList = byId('btnList');
 
         if (view === 'list') {
             grid.classList.add('list-view');
@@ -414,53 +416,10 @@
         }
     };
 
-    /* ── Mobile pill click ── */
-    window.shopMobilePill = function (pill) {
-        activeCat = pill.dataset.cat ?? '';
-        /* Update pill styles */
+    /* ── Update pill styles to reflect activeFilter ── */
+    function _updatePillStyles() {
         document.querySelectorAll('.mob-pill').forEach(p => {
-            const active = p === pill;
-            p.classList.toggle('bg-blue-600',   active);
-            p.classList.toggle('text-white',     active);
-            p.classList.toggle('border-blue-600', active);
-            p.classList.toggle('bg-white',       !active);
-            p.classList.toggle('text-slate-600', !active);
-            p.classList.toggle('border-slate-200', !active);
-        });
-        /* Sync desktop sidebar */
-        _syncSidebarFromMobilePill(activeCat);
-        fetchProducts();
-    };
-
-    /* Sync desktop sidebar radios/checkboxes when mobile pill is clicked */
-    function _syncSidebarFromMobilePill(cat) {
-        if (cat === '' || cat === 'physical' || cat === 'digital') {
-            /* It's a type selector — update radios */
-            document.querySelectorAll('input[name="sidebarType"]').forEach(r => {
-                r.checked = r.value === cat;
-            });
-            activeType = cat;
-            /* Uncheck all category checkboxes */
-            document.querySelectorAll('input[name="sidebarCat[]"]').forEach(c => c.checked = false);
-        } else {
-            /* It's a specific category id */
-            document.querySelectorAll('input[name="sidebarType"]').forEach(r => {
-                r.checked = r.value === '';
-            });
-            activeType = '';
-            document.querySelectorAll('input[name="sidebarCat[]"]').forEach(c => {
-                c.checked = c.value === cat;
-            });
-        }
-    }
-
-    /* ── Sync type from desktop sidebar radio ── */
-    window.shopSyncType = function (val) {
-        activeType = val;
-        activeCat  = val; /* treat type as activeCat for API compat */
-        /* Update mobile pills */
-        document.querySelectorAll('.mob-pill').forEach(p => {
-            const active = p.dataset.cat === val;
+            const active = p.dataset.cat === activeFilter;
             p.classList.toggle('bg-blue-600',    active);
             p.classList.toggle('text-white',     active);
             p.classList.toggle('border-blue-600', active);
@@ -468,12 +427,48 @@
             p.classList.toggle('text-slate-600', !active);
             p.classList.toggle('border-slate-200', !active);
         });
+    }
+
+    /* ── Mobile pill click ── */
+    window.shopMobilePill = function (pill) {
+        activeFilter = pill.dataset.cat ?? '';
+        _updatePillStyles();
+        _syncSidebarFromFilter(activeFilter);
+        fetchProducts();
+    };
+
+    /* Sync desktop sidebar controls to match activeFilter */
+    function _syncSidebarFromFilter(filter) {
+        if (filter === '' || filter === 'physical' || filter === 'digital') {
+            /* Type filter — update type radios, deselect category radios */
+            document.querySelectorAll('input[name="sidebarType"]').forEach(r => {
+                r.checked = r.value === filter;
+            });
+            document.querySelectorAll('input[name="sidebarCat"]').forEach(c => c.checked = false);
+        } else {
+            /* Category filter — reset type to All, check matching category radio */
+            document.querySelectorAll('input[name="sidebarType"]').forEach(r => {
+                r.checked = r.value === '';
+            });
+            document.querySelectorAll('input[name="sidebarCat"]').forEach(c => {
+                c.checked = c.value === filter;
+            });
+        }
+    }
+
+    /* ── Sync from desktop sidebar type radio ── */
+    window.shopSyncType = function (val) {
+        activeFilter = val;
+        /* Update mobile pills */
+        _updatePillStyles();
+        /* Deselect category radios when a type is selected */
+        document.querySelectorAll('input[name="sidebarCat"]').forEach(c => c.checked = false);
     };
 
     /* ── Sync sort between desktop & mobile ── */
     window.shopSyncSort = function (source) {
-        const dsk = $('desktopSortSelect');
-        const mob = $('mobileSortSelect');
+        const dsk = byId('desktopSortSelect');
+        const mob = byId('mobileSortSelect');
         if (!dsk || !mob) return;
         if (source === 'desktop') mob.value = dsk.value;
         else                      dsk.value = mob.value;
@@ -481,56 +476,45 @@
 
     /* ── Reset all filters ── */
     window.shopResetFilters = function () {
-        activeCat  = '';
-        activeType = '';
+        activeFilter = '';
         /* Desktop */
-        const deskSearch = $('desktopSearchInput');
+        const deskSearch = byId('desktopSearchInput');
         if (deskSearch) deskSearch.value = '';
-        const mobSearch  = $('mobileSearchInput');
+        const mobSearch  = byId('mobileSearchInput');
         if (mobSearch)  mobSearch.value  = '';
         document.querySelectorAll('input[name="sidebarType"]').forEach(r => r.checked = r.value === '');
-        document.querySelectorAll('input[name="sidebarCat[]"]').forEach(c => c.checked = false);
-        const dsk = $('desktopSortSelect'); if (dsk) dsk.value = 'newest';
-        const mob = $('mobileSortSelect');  if (mob) mob.value = 'newest';
-        const pMin = $('priceMin'); if (pMin) pMin.value = '';
-        const pMax = $('priceMax'); if (pMax) pMax.value = '';
-        /* Reset mobile pills */
-        document.querySelectorAll('.mob-pill').forEach(p => {
-            const active = p.dataset.cat === '';
-            p.classList.toggle('bg-blue-600',    active);
-            p.classList.toggle('text-white',     active);
-            p.classList.toggle('border-blue-600', active);
-            p.classList.toggle('bg-white',       !active);
-            p.classList.toggle('text-slate-600', !active);
-            p.classList.toggle('border-slate-200', !active);
-        });
+        document.querySelectorAll('input[name="sidebarCat"]').forEach(c => c.checked = false);
+        const dsk = byId('desktopSortSelect'); if (dsk) dsk.value = 'newest';
+        const mob = byId('mobileSortSelect');  if (mob) mob.value = 'newest';
+        const pMin = byId('priceMin'); if (pMin) pMin.value = '';
+        const pMax = byId('priceMax'); if (pMax) pMax.value = '';
+        _updatePillStyles();
         fetchProducts();
     };
 
     /* ── Build API params ── */
     function _buildParams() {
-        /* Search: prefer whichever input has focus / content */
-        const deskSearch = $('desktopSearchInput');
-        const mobSearch  = $('mobileSearchInput');
+        /* Search: prefer whichever input has content */
+        const deskSearch = byId('desktopSearchInput');
+        const mobSearch  = byId('mobileSearchInput');
         const q = (deskSearch && deskSearch.value)
             ? deskSearch.value
             : (mobSearch ? mobSearch.value : '');
 
-        /* Category: start from activeCat (driven by pills / sidebar type) */
-        let cat = activeCat;
+        /* Category: start from activeFilter (pill/sidebar type selection) */
+        let cat = activeFilter;
 
-        /* If specific category checkboxes are checked, gather their IDs */
-        const checkedCats = [];
-        document.querySelectorAll('input[name="sidebarCat[]"]:checked').forEach(c => checkedCats.push(c.value));
-        if (checkedCats.length > 0) cat = checkedCats[0]; /* first checked takes precedence */
+        /* If a sidebar category radio is selected, it takes precedence */
+        const selectedCat = document.querySelector('input[name="sidebarCat"]:checked');
+        if (selectedCat) cat = selectedCat.value;
 
         /* Sort */
-        const dsk  = $('desktopSortSelect');
+        const dsk  = byId('desktopSortSelect');
         const sort = dsk ? dsk.value : 'newest';
 
         /* Price */
-        const pMin = $('priceMin')  ? $('priceMin').value  : '';
-        const pMax = $('priceMax')  ? $('priceMax').value  : '';
+        const pMin = byId('priceMin')  ? byId('priceMin').value  : '';
+        const pMax = byId('priceMax')  ? byId('priceMax').value  : '';
 
         return { q, cat, sort, price_min: pMin, price_max: pMax };
     }
@@ -616,10 +600,10 @@
 
     /* ── Core fetch function ── */
     window.fetchProducts = async function () {
-        const grid      = $('productGrid');
-        const loading   = $('shopLoading');
-        const noResults = $('shopNoResults');
-        const countEl   = $('resultsCount');
+        const grid      = byId('productGrid');
+        const loading   = byId('shopLoading');
+        const noResults = byId('shopNoResults');
+        const countEl   = byId('resultsCount');
 
         grid.innerHTML = '';
         loading.classList.remove('hidden');
@@ -659,7 +643,7 @@
     /* ── Initial load ── */
     document.addEventListener('DOMContentLoaded', function () {
         /* Update initial results count from SSR cards */
-        const countEl = $('resultsCount');
+        const countEl = byId('resultsCount');
         if (countEl) {
             countEl.textContent = document.querySelectorAll('#productGrid .shop-card').length;
         }

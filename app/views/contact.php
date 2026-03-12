@@ -309,8 +309,13 @@
         const subject = document.getElementById('contactSubject').value;
         const message = document.getElementById('contactMessage').value.trim();
 
+        const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!name || !email || !message) {
             showAlert('Please fill in all required fields.', false);
+            return;
+        }
+        if (!emailRe.test(email)) {
+            showAlert('Please enter a valid email address.', false);
             return;
         }
 

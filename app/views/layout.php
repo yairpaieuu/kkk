@@ -512,7 +512,9 @@
         function subscribeNewsletter() {
             const input = document.getElementById('newsletter-email');
             const email = input ? input.value.trim() : '';
-            if (!email) return;
+            const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!email) { alert('Please enter your email address.'); return; }
+            if (!emailRe.test(email)) { alert('Please enter a valid email address.'); return; }
             alert('Thank you! You\'re now subscribed.');
             if (input) input.value = '';
         }
