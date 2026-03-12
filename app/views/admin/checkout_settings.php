@@ -129,7 +129,11 @@
                 <div class="space-y-2">
                     <input type="text" name="code" placeholder="Code (e.g. SAVE10)" required class="w-full bg-gray-900 border border-gray-700 text-white p-2 rounded text-sm focus:border-blue-500 outline-none uppercase font-mono">
                     <div class="flex gap-2">
-                        <input type="number" name="amount" placeholder="Amount" required class="w-full bg-gray-900 border border-gray-700 text-white p-2 rounded text-sm focus:border-blue-500 outline-none">
+                        <input type="number" name="amount" placeholder="Amount" required class="flex-1 bg-gray-900 border border-gray-700 text-white p-2 rounded text-sm focus:border-blue-500 outline-none">
+                        <select name="discount_type" class="bg-gray-900 border border-gray-700 text-white p-2 rounded text-sm focus:border-blue-500 outline-none">
+                            <option value="fixed">Fixed (Ks)</option>
+                            <option value="percentage">% Off</option>
+                        </select>
                         <button type="submit" class="bg-yellow-600 hover:bg-yellow-500 text-white px-4 rounded text-sm font-bold">Add</button>
                     </div>
                 </div>
@@ -140,7 +144,7 @@
                 <li class="flex justify-between items-center bg-gray-800/30 p-3 rounded-lg border border-white/5 group hover:border-yellow-500/30 transition">
                     <div><div class="text-yellow-400 font-mono font-bold text-sm tracking-wide"><?= htmlspecialchars($c['code']) ?></div></div>
                     <div class="flex items-center gap-3">
-                        <span class="text-white font-bold text-sm">-<?= number_format($c['discount_amount']) ?></span>
+                        <span class="text-white font-bold text-sm">-<?= number_format((float)($c['value'] ?? $c['discount_amount'] ?? 0)) ?><?= (($c['discount_type'] ?? '') === 'percentage') ? '%' : ' Ks' ?></span>
                         <form method="POST" onsubmit="return confirm('Delete?');">
                             <input type="hidden" name="delete_item" value="1">
                             <input type="hidden" name="table" value="coupons">

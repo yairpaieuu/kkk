@@ -930,7 +930,8 @@ if (!class_exists('AdminController')) {
                         $message = "Payment method added!"; 
                     }
                     elseif (isset($_POST['add_coupon'])) { 
-                        $this->db->prepare("INSERT INTO coupons (code, discount_amount) VALUES (?, ?)")->execute([$_POST['code'], $_POST['amount']]); 
+                        $discType = in_array($_POST['discount_type'] ?? 'fixed', ['fixed','percentage']) ? $_POST['discount_type'] : 'fixed';
+                        $this->db->prepare("INSERT INTO coupons (code, discount_type, value) VALUES (?, ?, ?)")->execute([$_POST['code'], $discType, (float)($_POST['amount'] ?? 0)]); 
                         $message = "Coupon added!"; 
                     }
                     elseif (isset($_POST['delete_item'])) { 
