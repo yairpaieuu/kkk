@@ -131,27 +131,14 @@
 ?>
 
     <!-- ============================================================ -->
-    <!-- 📢  ANNOUNCEMENT BAR  (desktop only)                         -->
-    <!-- ============================================================ -->
-    <div class="ann-bar hidden md:block bg-blue-700 text-white text-xs text-center relative" style="padding:8px 48px;">
-        🚚 Free shipping on orders above 50,000 Ks &nbsp;|&nbsp; 📦 Quality Guaranteed
-        <button onclick="this.parentElement.style.display='none'"
-                aria-label="Dismiss announcement"
-                class="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition text-base leading-none">
-            &times;
-        </button>
-    </div>
-
-
-    <!-- ============================================================ -->
     <!-- 🖥️  DESKTOP HEADER  (hidden on mobile)                       -->
     <!-- ============================================================ -->
     <header class="hidden md:flex flex-col fixed top-0 w-full z-50 site-header">
 
-        <!-- Announcement bar inside fixed header so it scrolls with sticky offset -->
+        <!-- Announcement bar inside fixed header -->
         <div class="ann-bar bg-blue-700 text-white text-xs text-center relative" style="padding:8px 48px;" id="desk-ann-bar">
             🚚 Free shipping on orders above 50,000 Ks &nbsp;|&nbsp; 📦 Quality Guaranteed
-            <button onclick="document.getElementById('desk-ann-bar').style.display='none'; document.getElementById('desk-ann-spacer').style.display='none';"
+            <button onclick="dismissAnnouncement()"
                     aria-label="Dismiss announcement"
                     class="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition text-base leading-none">
                 &times;
@@ -308,10 +295,12 @@
                     <p class="text-slate-400 text-sm mt-0.5">Subscribe to our newsletter and never miss an offer.</p>
                 </div>
                 <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <label for="newsletter-email" class="sr-only">Email address</label>
                     <input type="email" placeholder="Your email address"
                            id="newsletter-email"
+                           aria-label="Email address for newsletter"
                            class="bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg px-4 py-2.5 text-sm outline-none focus:border-blue-500 transition w-full sm:w-64">
-                    <button onclick="(function(){var v=document.getElementById('newsletter-email').value.trim();if(!v){return;}alert('Thank you! You\'re now subscribed.');document.getElementById('newsletter-email').value='';})()"
+                    <button onclick="subscribeNewsletter()"
                             class="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition whitespace-nowrap">
                         Subscribe
                     </button>
@@ -511,6 +500,23 @@
     <!-- JAVASCRIPT                                                    -->
     <!-- ============================================================ -->
     <script>
+        /* ── Announcement bar dismiss ─────────────────────────────── */
+        function dismissAnnouncement() {
+            const bar    = document.getElementById('desk-ann-bar');
+            const spacer = document.getElementById('desk-ann-spacer');
+            if (bar)    bar.style.display    = 'none';
+            if (spacer) spacer.style.height  = '64px';
+        }
+
+        /* ── Newsletter subscribe ─────────────────────────────────── */
+        function subscribeNewsletter() {
+            const input = document.getElementById('newsletter-email');
+            const email = input ? input.value.trim() : '';
+            if (!email) return;
+            alert('Thank you! You\'re now subscribed.');
+            if (input) input.value = '';
+        }
+
         /* ── Mobile search overlay ───────────────────────────────── */
         let searchOpen = false;
         function toggleSearch() {
