@@ -214,7 +214,7 @@
                 if (mapInput) settingsObj.map_url = mapInput.value.trim();
 
                 payload.push({
-                    id:         parseInt(card.dataset.id, 10),
+                    id:         parseInt(card.dataset.id, 10) || 0,
                     page:       card.dataset.page,
                     section_key: card.dataset.key,
                     title:      card.querySelector('.section-title').value,

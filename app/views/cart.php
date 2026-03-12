@@ -23,7 +23,7 @@
                         class="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-3 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer">
                     <option value="" disabled selected>-- Select Delivery Area --</option>
                     <?php foreach ($delivery_methods as $dm): ?>
-                        <option value="<?= (int) $dm['id'] ?>" data-cost="<?= htmlspecialchars((string)(float) $dm['cost'], ENT_QUOTES, 'UTF-8') ?>">
+                        <option value="<?= (int) $dm['id'] ?>" data-cost="<?= (float) $dm['cost'] ?>">
                             <?= htmlspecialchars($dm['name'], ENT_QUOTES, 'UTF-8') ?> (+<?= number_format($dm['cost']) ?> Ks)
                         </option>
                     <?php endforeach; ?>

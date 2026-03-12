@@ -426,15 +426,19 @@ if (!class_exists('HomeController')) {
                     exit;
                 }
 
-                // Create table if needed
-                $this->db->exec("CREATE TABLE IF NOT EXISTS contact_messages (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    email VARCHAR(255) NOT NULL,
-                    phone VARCHAR(50) DEFAULT '',
-                    message TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                // Create table if needed (idempotent - uses CREATE TABLE IF NOT EXISTS)
+                static $tableReady = false;
+                if (!$tableReady) {
+                    $this->db->exec("CREATE TABLE IF NOT EXISTS contact_messages (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL,
+                        email VARCHAR(255) NOT NULL,
+                        phone VARCHAR(50) DEFAULT '',
+                        message TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                    $tableReady = true;
+                }
 
                 $stmt = $this->db->prepare("INSERT INTO contact_messages (name, email, phone, message) VALUES (?, ?, ?, ?)");
                 $stmt->execute([$name, $email, $phone, $message]);

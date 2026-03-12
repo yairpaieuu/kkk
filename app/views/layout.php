@@ -454,7 +454,7 @@
         /* ── Cart count ──────────────────────────────────────────── */
         function updateCartCount() {
             const cart = JSON.parse(localStorage.getItem('cart')) || [];
-            const count = cart.reduce((sum, item) => sum + (item.qty ?? 1), 0);
+            const count = cart.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
 
             ['desktop-cart-count', 'mobile-cart-count', 'mobile-cart-count-top'].forEach(id => {
                 const el = document.getElementById(id);
