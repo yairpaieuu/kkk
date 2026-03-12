@@ -3,226 +3,482 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title><?= $title ?? 'Store' ?></title>
+    <title><?= htmlspecialchars($title ?? ($siteSettings['site_name'] ?? 'Store')) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js" defer></script>
+
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
-        /* Hide scrollbar for Chrome, Safari and Opera */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        /* Hide scrollbar for IE, Edge and Firefox */
-        .no-scrollbar { -ms-overflow-style: none;  scrollbar-width: none; }
-        .glass-nav { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.05); }
-        .glass-header { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(16px); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Light card utility used by child views */
+        .glass-panel {
+            background: white;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        /* Desktop header shadow */
+        .site-header {
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+
+        /* Active nav underline */
+        .nav-active {
+            color: #2563eb !important;
+            position: relative;
+        }
+        .nav-active::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: -2px;
+            width: 100%;
+            height: 2px;
+            background-color: #2563eb;
+            border-radius: 9999px;
+        }
+
+        /* Search overlay slide-down */
+        #search-overlay {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            opacity: 0;
+        }
+        #search-overlay.open {
+            max-height: 80px;
+            opacity: 1;
+        }
+
+        /* Mobile menu overlay */
+        #mobile-menu-overlay {
+            display: none;
+        }
+        #mobile-menu-overlay.open {
+            display: flex;
+        }
+
+        /* Mobile bottom nav */
+        .mobile-bottom-nav {
+            background: #ffffff;
+            border-top: 1px solid #e2e8f0;
+            box-shadow: 0 -1px 6px rgba(0,0,0,0.06);
+        }
+
+        /* Cart FAB border matches page bg */
+        .cart-fab {
+            border: 4px solid #f8fafc;
+        }
     </style>
 </head>
-<body class="flex flex-col min-h-screen relative">
+<body class="flex flex-col min-h-screen">
 
-    <!-- ========================================== -->
-    <!-- 🖥️ DESKTOP HEADER (Hidden on Mobile)       -->
-    <!-- ========================================== -->
-    <header class="hidden md:flex fixed top-0 w-full z-50 glass-header transition-all duration-300">
-        <div class="max-w-7xl mx-auto w-full px-6 h-20 flex items-center justify-between">
-            
-            <!-- 1. Logo (UPDATED) -->
-            <a href="/" class="flex items-center gap-3 group">
-                <img src="/assets/logo.png" alt="Logo" class="h-10 w-auto object-contain group-hover:scale-105 transition duration-300" loading="eager">
-                <div class="flex flex-col">
-                    <span class="text-xl font-bold text-white tracking-tight leading-none group-hover:text-blue-400 transition">KKK LED</span>
-                    <span class="text-[10px] text-gray-400 uppercase tracking-widest">Shop</span>
+<?php
+    $uri = strtok($_SERVER['REQUEST_URI'], '?');
+    $siteName = $siteSettings['site_name'] ?? 'Store';
+    $phone    = $siteSettings['phone']     ?? '';
+    $address  = $siteSettings['address']   ?? '';
+    $email    = $siteSettings['email']     ?? '';
+
+    function navClass(string $path, string $uri): string {
+        return $uri === $path ? 'nav-active text-blue-600 font-semibold text-sm transition' : 'text-slate-600 hover:text-blue-600 font-medium text-sm transition';
+    }
+    function mobileNavClass(string $path, string $uri): string {
+        return $uri === $path ? 'text-blue-600' : 'text-slate-500';
+    }
+?>
+
+    <!-- ============================================================ -->
+    <!-- 🖥️  DESKTOP HEADER  (hidden on mobile)                       -->
+    <!-- ============================================================ -->
+    <header class="hidden md:flex flex-col fixed top-0 w-full z-50 site-header">
+        <div class="max-w-7xl mx-auto w-full px-6 h-16 flex items-center justify-between">
+
+            <!-- Logo -->
+            <a href="/" class="flex items-center gap-2.5 group flex-shrink-0">
+                <img src="/assets/logo.png" alt="<?= htmlspecialchars($siteName) ?> Logo"
+                     class="h-9 w-auto object-contain group-hover:scale-105 transition duration-300" loading="eager">
+                <div class="flex flex-col leading-none">
+                    <span class="text-lg font-bold text-slate-800 tracking-tight group-hover:text-blue-600 transition">
+                        <?= htmlspecialchars($siteName) ?>
+                    </span>
+                    <span class="text-[9px] text-slate-400 uppercase tracking-widest">Shop</span>
                 </div>
             </a>
 
-            <!-- 2. Desktop Navigation -->
-            <nav class="flex items-center gap-8 bg-white/5 px-8 py-2.5 rounded-full border border-white/5 backdrop-blur-md">
-                <a href="/" class="text-sm font-medium <?= $_SERVER['REQUEST_URI'] == '/' ? 'text-white' : 'text-gray-400 hover:text-white' ?> transition">Home</a>
-                <a href="/shop" class="text-sm font-medium <?= $_SERVER['REQUEST_URI'] == '/shop' ? 'text-white' : 'text-gray-400 hover:text-white' ?> transition">Shop</a>
+            <!-- Center Nav -->
+            <nav class="flex items-center gap-7">
+                <a href="/" class="<?= navClass('/', $uri) ?> pb-0.5 relative">Home</a>
+                <a href="/shop" class="<?= navClass('/shop', $uri) ?> pb-0.5 relative">Shop</a>
+                <a href="/contact" class="<?= navClass('/contact', $uri) ?> pb-0.5 relative">Contact</a>
             </nav>
 
-            <!-- 3. Right Actions (Search, Profile, Cart) -->
-            <div class="flex items-center gap-4">
-                <!-- Search Icon -->
-                <button onclick="toggleSearch()" class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition">
-                    <i class="fa-solid fa-magnifying-glass"></i>
+            <!-- Right Actions -->
+            <div class="flex items-center gap-2">
+
+                <!-- Search -->
+                <button onclick="toggleSearch()" aria-label="Search"
+                        class="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition">
+                    <i class="fa-solid fa-magnifying-glass text-sm"></i>
                 </button>
 
                 <!-- Profile -->
-                <a href="/profile" class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition relative group">
-                    <i class="fa-regular fa-user text-lg"></i>
-                    <?php if(isset($_SESSION['user_id'])): ?>
-                        <div class="absolute bottom-2 right-2 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-[#0f172a]"></div>
+                <a href="/profile" aria-label="Profile"
+                   class="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition relative">
+                    <i class="fa-regular fa-user text-sm"></i>
+                    <?php if (isset($_SESSION['user_id'])): ?>
+                        <span class="absolute bottom-1.5 right-1.5 w-2 h-2 bg-green-500 rounded-full border-2 border-white"></span>
                     <?php endif; ?>
                 </a>
 
-                <!-- Cart Button -->
-                <a href="/cart" class="group relative bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-full font-semibold text-sm flex items-center gap-2 transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40">
+                <!-- Cart -->
+                <a href="/cart"
+                   class="relative flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-full transition shadow-sm shadow-blue-200 ml-1">
                     <i class="fa-solid fa-cart-shopping"></i>
                     <span>Cart</span>
-                    <span id="desktop-cart-count" class="bg-white text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center hidden">0</span>
+                    <span id="desktop-cart-count"
+                          class="hidden bg-white text-blue-600 text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">0</span>
                 </a>
+            </div>
+        </div>
+
+        <!-- Search Slide-Down -->
+        <div id="search-overlay" class="w-full bg-white border-t border-slate-100">
+            <div class="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3">
+                <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
+                <input id="search-input" type="text" placeholder="Search products…"
+                       class="flex-grow outline-none text-sm text-slate-800 placeholder-slate-400 bg-transparent"
+                       onkeydown="if(event.key==='Enter'){ window.location='/shop?q='+encodeURIComponent(this.value); }">
+                <button onclick="toggleSearch()" class="text-slate-400 hover:text-slate-600 transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
         </div>
     </header>
 
-    <!-- ========================================== -->
-    <!-- 📱 MOBILE HEADER (Top Bar)                 -->
-    <!-- ========================================== -->
-    <header class="md:hidden flex items-center justify-between px-4 py-4 bg-[#0f172a] sticky top-0 z-40 border-b border-white/5">
-        <!-- Logo (UPDATED) -->
-        <a href="/" class="flex items-center gap-2">
-            <img src="/assets/logo.png" alt="Logo" class="h-8 w-auto object-contain" loading="eager">
-            <span class="font-bold text-lg text-white">KKK LED</span>
-        </a>
-        <div class="flex items-center gap-3">
-            <a href="/profile" class="w-8 h-8 bg-white/5 rounded-full flex items-center justify-center text-white">
-                <i class="fa-regular fa-user text-xs"></i>
+    <!-- Spacer for fixed desktop header -->
+    <div class="hidden md:block" style="height:64px;"></div>
+
+
+    <!-- ============================================================ -->
+    <!-- 📱  MOBILE TOP BAR  (hidden on desktop)                      -->
+    <!-- ============================================================ -->
+    <header class="md:hidden sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between px-4 h-14">
+
+            <!-- Logo -->
+            <a href="/" class="flex items-center gap-2">
+                <img src="/assets/logo.png" alt="<?= htmlspecialchars($siteName) ?>"
+                     class="h-8 w-auto object-contain" loading="eager">
+                <span class="font-bold text-base text-slate-800"><?= htmlspecialchars($siteName) ?></span>
             </a>
+
+            <div class="flex items-center gap-2">
+                <!-- Search (mobile) -->
+                <button onclick="toggleSearch()" aria-label="Search"
+                        class="w-8 h-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 transition">
+                    <i class="fa-solid fa-magnifying-glass text-sm"></i>
+                </button>
+
+                <!-- Cart icon (mobile top bar) -->
+                <a href="/cart" class="relative w-8 h-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 transition">
+                    <i class="fa-solid fa-cart-shopping text-sm"></i>
+                    <span id="mobile-cart-count-top"
+                          class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-0.5">0</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Mobile Search Slide-Down -->
+        <div id="search-overlay" class="w-full bg-white border-t border-slate-100 md:hidden">
+            <div class="px-4 py-2.5 flex items-center gap-3">
+                <i class="fa-solid fa-magnifying-glass text-slate-400 text-sm"></i>
+                <input id="search-input-mobile" type="text" placeholder="Search products…"
+                       class="flex-grow outline-none text-sm text-slate-800 placeholder-slate-400 bg-transparent"
+                       onkeydown="if(event.key==='Enter'){ window.location='/shop?q='+encodeURIComponent(this.value); }">
+                <button onclick="toggleSearch()" class="text-slate-400">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
         </div>
     </header>
 
 
-    <!-- ========================================== -->
-    <!-- MAIN CONTENT AREA                          -->
-    <!-- ========================================== -->
-    <!-- Added padding-top for desktop header spacing -->
-    <main class="flex-grow w-full max-w-7xl mx-auto p-4 md:px-6 md:pt-28 pb-24 md:pb-12">
+    <!-- ============================================================ -->
+    <!-- MAIN CONTENT                                                  -->
+    <!-- ============================================================ -->
+    <!-- Child views manage their own containers; add bottom padding   -->
+    <!-- for mobile bottom nav                                         -->
+    <main class="flex-grow pb-20 md:pb-0">
         <?php if (file_exists($childView)) require_once $childView; ?>
     </main>
 
 
-    <!-- ========================================== -->
-    <!-- 📱 MOBILE BOTTOM NAVIGATION (Hidden Desktop) -->
-    <!-- ========================================== -->
-    <nav class="md:hidden fixed bottom-0 left-0 w-full glass-nav z-50 pb-safe">
-        <div class="flex justify-around items-center h-16 px-2">
-            
-            <a href="/" class="flex flex-col items-center justify-center w-full h-full space-y-1 group">
-                <div class="relative p-1.5 rounded-xl group-hover:bg-white/5 transition-colors <?= $_SERVER['REQUEST_URI'] == '/' ? 'text-blue-500' : 'text-gray-500' ?>">
-                    <i class="fa-solid fa-house text-xl mb-0.5"></i>
-                    <?php if($_SERVER['REQUEST_URI'] == '/'): ?>
-                        <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-500 rounded-full"></span>
-                    <?php endif; ?>
-                </div>
-                <span class="text-[10px] font-medium <?= $_SERVER['REQUEST_URI'] == '/' ? 'text-blue-500' : 'text-gray-500' ?>">Home</span>
-            </a>
+    <!-- ============================================================ -->
+    <!-- 🖥️  FOOTER  (hidden on mobile)                               -->
+    <!-- ============================================================ -->
+    <footer class="hidden md:block bg-slate-900 text-slate-300 mt-auto">
+        <div class="max-w-7xl mx-auto px-6 py-14">
+            <div class="grid grid-cols-4 gap-10 mb-10">
 
-            <a href="/shop" class="flex flex-col items-center justify-center w-full h-full space-y-1 group">
-                <div class="relative p-1.5 rounded-xl group-hover:bg-white/5 transition-colors <?= $_SERVER['REQUEST_URI'] == '/shop' ? 'text-blue-500' : 'text-gray-500' ?>">
-                    <i class="fa-solid fa-store text-xl mb-0.5"></i>
-                </div>
-                <span class="text-[10px] font-medium <?= $_SERVER['REQUEST_URI'] == '/shop' ? 'text-blue-500' : 'text-gray-500' ?>">Shop</span>
-            </a>
-
-            <!-- Floating Action Button (Cart) -->
-            <div class="relative -top-5">
-                <a href="/cart" class="w-14 h-14 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/40 border-4 border-[#0f172a] transform active:scale-95 transition">
-                    <i class="fa-solid fa-cart-shopping text-xl text-white"></i>
-                    <span id="mobile-cart-count" class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold h-5 w-5 flex items-center justify-center rounded-full border-2 border-[#0f172a] hidden">0</span>
-                </a>
-            </div>
-
-            <a href="/profile" class="flex flex-col items-center justify-center w-full h-full space-y-1 group">
-                <div class="relative p-1.5 rounded-xl group-hover:bg-white/5 transition-colors <?= $_SERVER['REQUEST_URI'] == '/profile' ? 'text-blue-500' : 'text-gray-500' ?>">
-                    <i class="fa-solid fa-user text-xl mb-0.5"></i>
-                </div>
-                <span class="text-[10px] font-medium <?= $_SERVER['REQUEST_URI'] == '/profile' ? 'text-blue-500' : 'text-gray-500' ?>">Profile</span>
-            </a>
-
-            <!-- More Menu (Optional) -->
-            <button onclick="toggleMobileMenu()" class="flex flex-col items-center justify-center w-full h-full space-y-1 group md:hidden">
-                <div class="relative p-1.5 rounded-xl group-hover:bg-white/5 transition-colors text-gray-500">
-                    <i class="fa-solid fa-bars text-xl mb-0.5"></i>
-                </div>
-                <span class="text-[10px] font-medium text-gray-500">Menu</span>
-            </button>
-
-        </div>
-    </nav>
-
-    <!-- ========================================== -->
-    <!-- 🖥️ DESKTOP FOOTER (Hidden Mobile)          -->
-    <!-- ========================================== -->
-    <footer class="hidden md:block bg-[#020617] border-t border-white/5 mt-auto">
-        <div class="max-w-7xl mx-auto px-6 py-12">
-            <div class="grid grid-cols-4 gap-8 mb-8">
+                <!-- Brand / About -->
                 <div class="col-span-1">
-                    <!-- Logo (UPDATED) -->
-                    <div class="flex items-center gap-3 mb-4">
-                        <img src="/assets/logo.png" alt="Logo" class="h-8 w-auto object-contain" loading="eager">
-                        <span class="font-bold text-xl text-white">KKK LED</span>
+                    <div class="flex items-center gap-2.5 mb-4">
+                        <img src="/assets/logo.png" alt="<?= htmlspecialchars($siteName) ?>"
+                             class="h-8 w-auto object-contain brightness-200" loading="lazy">
+                        <span class="font-bold text-lg text-white"><?= htmlspecialchars($siteName) ?></span>
                     </div>
-                    <p class="text-gray-400 text-sm leading-relaxed">
-                        Your one-stop shop for premium LED lights, electrical components, and digital goods. Quality guaranteed.
+                    <p class="text-sm text-slate-400 leading-relaxed">
+                        Your one-stop shop for premium products. Quality guaranteed, fast delivery.
                     </p>
                 </div>
+
+                <!-- Quick Links -->
                 <div>
-                    <h4 class="text-white font-bold mb-4">Quick Links</h4>
-                    <ul class="space-y-2 text-sm text-gray-400">
-                        <li><a href="/" class="hover:text-blue-400 transition">Home</a></li>
-                        <li><a href="/shop" class="hover:text-blue-400 transition">Shop Products</a></li>
-                        <li><a href="/cart" class="hover:text-blue-400 transition">My Cart</a></li>
+                    <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-widest">Quick Links</h4>
+                    <ul class="space-y-2.5 text-sm">
+                        <li><a href="/" class="text-slate-400 hover:text-blue-400 transition">Home</a></li>
+                        <li><a href="/shop" class="text-slate-400 hover:text-blue-400 transition">Shop</a></li>
+                        <li><a href="/cart" class="text-slate-400 hover:text-blue-400 transition">My Cart</a></li>
+                        <li><a href="/profile" class="text-slate-400 hover:text-blue-400 transition">My Account</a></li>
+                        <li><a href="/contact" class="text-slate-400 hover:text-blue-400 transition">Contact Us</a></li>
                     </ul>
                 </div>
-                
+
+                <!-- Contact Info -->
                 <div>
-                    <h4 class="text-white font-bold mb-4">Contact Us</h4>
-                    <ul class="space-y-2 text-sm text-gray-400">
-                        <li><i class="fa-solid fa-phone mr-2"></i> +95 97676 2 7676</li>
-                        <li><i class="fa-solid fa-envelope mr-2"></i> support@kkkled.com</li>
-                        
+                    <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-widest">Contact</h4>
+                    <ul class="space-y-3 text-sm text-slate-400">
+                        <?php if ($phone): ?>
+                        <li class="flex items-start gap-2.5">
+                            <i class="fa-solid fa-phone mt-0.5 text-blue-400 w-4 flex-shrink-0"></i>
+                            <span><?= htmlspecialchars($phone) ?></span>
+                        </li>
+                        <?php endif; ?>
+                        <?php if ($email): ?>
+                        <li class="flex items-start gap-2.5">
+                            <i class="fa-solid fa-envelope mt-0.5 text-blue-400 w-4 flex-shrink-0"></i>
+                            <a href="mailto:<?= htmlspecialchars($email) ?>" class="hover:text-blue-400 transition">
+                                <?= htmlspecialchars($email) ?>
+                            </a>
+                        </li>
+                        <?php endif; ?>
+                        <?php if ($address): ?>
+                        <li class="flex items-start gap-2.5">
+                            <i class="fa-solid fa-location-dot mt-0.5 text-blue-400 w-4 flex-shrink-0"></i>
+                            <span><?= htmlspecialchars($address) ?></span>
+                        </li>
+                        <?php endif; ?>
                     </ul>
+                </div>
+
+                <!-- Social -->
+                <div>
+                    <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-widest">Follow Us</h4>
+                    <div class="flex flex-wrap gap-3">
+                        <a href="#" aria-label="Facebook"
+                           class="w-9 h-9 rounded-full bg-slate-800 hover:bg-blue-600 flex items-center justify-center text-slate-400 hover:text-white transition">
+                            <i class="fa-brands fa-facebook-f text-sm"></i>
+                        </a>
+                        <a href="#" aria-label="Instagram"
+                           class="w-9 h-9 rounded-full bg-slate-800 hover:bg-pink-600 flex items-center justify-center text-slate-400 hover:text-white transition">
+                            <i class="fa-brands fa-instagram text-sm"></i>
+                        </a>
+                        <a href="#" aria-label="Telegram"
+                           class="w-9 h-9 rounded-full bg-slate-800 hover:bg-sky-500 flex items-center justify-center text-slate-400 hover:text-white transition">
+                            <i class="fa-brands fa-telegram text-sm"></i>
+                        </a>
+                        <a href="#" aria-label="YouTube"
+                           class="w-9 h-9 rounded-full bg-slate-800 hover:bg-red-600 flex items-center justify-center text-slate-400 hover:text-white transition">
+                            <i class="fa-brands fa-youtube text-sm"></i>
+                        </a>
+                    </div>
                 </div>
             </div>
-            <div class="border-t border-white/5 pt-8 text-center text-gray-500 text-xs">
-                &copy; <?= date('Y') ?> KKK LED Shop. All rights reserved.
+
+            <div class="border-t border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
+                <p class="text-xs text-slate-500">
+                    &copy; <?= date('Y') ?> <?= htmlspecialchars($siteName) ?>. All rights reserved.
+                </p>
+                <p class="text-xs text-slate-600">Built with ❤️ for you</p>
             </div>
         </div>
     </footer>
 
-    <!-- CART SCRIPT -->
-    <script>
-        function updateCartCount() {
-            const cart = JSON.parse(localStorage.getItem('cart')) || [];
-            const count = cart.reduce((sum, item) => sum + item.qty, 0);
-            
-            // Update Mobile
-            const mobileBadge = document.getElementById('mobile-cart-count');
-            if(mobileBadge) {
-                mobileBadge.innerText = count;
-                mobileBadge.classList.toggle('hidden', count === 0);
-            }
 
-            // Update Desktop
-            const desktopBadge = document.getElementById('desktop-cart-count');
-            if(desktopBadge) {
-                desktopBadge.innerText = count;
-                desktopBadge.classList.toggle('hidden', count === 0);
+    <!-- ============================================================ -->
+    <!-- 📱  MOBILE BOTTOM NAVIGATION  (hidden on desktop)            -->
+    <!-- ============================================================ -->
+    <nav class="md:hidden fixed bottom-0 left-0 w-full z-50 mobile-bottom-nav">
+        <div class="flex items-end justify-around h-16 px-2">
+
+            <!-- Home -->
+            <a href="/" class="flex flex-col items-center justify-center flex-1 h-full gap-0.5 <?= mobileNavClass('/', $uri) ?>">
+                <div class="relative">
+                    <i class="fa-solid fa-house text-xl"></i>
+                    <?php if ($uri === '/'): ?>
+                        <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>
+                    <?php endif; ?>
+                </div>
+                <span class="text-[10px] font-medium">Home</span>
+            </a>
+
+            <!-- Shop -->
+            <a href="/shop" class="flex flex-col items-center justify-center flex-1 h-full gap-0.5 <?= mobileNavClass('/shop', $uri) ?>">
+                <div class="relative">
+                    <i class="fa-solid fa-store text-xl"></i>
+                    <?php if ($uri === '/shop'): ?>
+                        <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>
+                    <?php endif; ?>
+                </div>
+                <span class="text-[10px] font-medium">Shop</span>
+            </a>
+
+            <!-- Cart FAB -->
+            <div class="flex flex-col items-center justify-center flex-1 -mt-5">
+                <a href="/cart" aria-label="Cart"
+                   class="cart-fab relative w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center shadow-lg shadow-blue-300 transition active:scale-95">
+                    <i class="fa-solid fa-cart-shopping text-xl text-white"></i>
+                    <span id="mobile-cart-count"
+                          class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-0.5 border-2 border-white">0</span>
+                </a>
+                <span class="text-[10px] font-medium text-slate-500 mt-0.5">Cart</span>
+            </div>
+
+            <!-- Profile -->
+            <a href="/profile" class="flex flex-col items-center justify-center flex-1 h-full gap-0.5 <?= mobileNavClass('/profile', $uri) ?>">
+                <div class="relative">
+                    <i class="fa-solid fa-user text-xl"></i>
+                    <?php if ($uri === '/profile'): ?>
+                        <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>
+                    <?php endif; ?>
+                </div>
+                <span class="text-[10px] font-medium">Profile</span>
+            </a>
+
+            <!-- Contact -->
+            <a href="/contact" class="flex flex-col items-center justify-center flex-1 h-full gap-0.5 <?= mobileNavClass('/contact', $uri) ?>">
+                <div class="relative">
+                    <i class="fa-solid fa-headset text-xl"></i>
+                    <?php if ($uri === '/contact'): ?>
+                        <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>
+                    <?php endif; ?>
+                </div>
+                <span class="text-[10px] font-medium">Contact</span>
+            </a>
+        </div>
+    </nav>
+
+
+    <!-- ============================================================ -->
+    <!-- 📱  MOBILE MENU OVERLAY  (triggered by toggleMobileMenu())   -->
+    <!-- ============================================================ -->
+    <div id="mobile-menu-overlay"
+         class="fixed inset-0 z-[60] flex-col bg-white hidden"
+         onclick="toggleMobileMenu()">
+        <div class="flex items-center justify-between px-4 py-4 border-b border-slate-200" onclick="event.stopPropagation()">
+            <span class="font-bold text-slate-800 text-lg"><?= htmlspecialchars($siteName) ?></span>
+            <button onclick="toggleMobileMenu()" class="w-8 h-8 flex items-center justify-center text-slate-500">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+        </div>
+        <nav class="flex flex-col px-4 py-6 gap-1" onclick="event.stopPropagation()">
+            <a href="/" class="flex items-center gap-3 px-3 py-3 rounded-xl <?= $uri === '/' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-slate-700 hover:bg-slate-50' ?> transition">
+                <i class="fa-solid fa-house w-5 text-center"></i> Home
+            </a>
+            <a href="/shop" class="flex items-center gap-3 px-3 py-3 rounded-xl <?= $uri === '/shop' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-slate-700 hover:bg-slate-50' ?> transition">
+                <i class="fa-solid fa-store w-5 text-center"></i> Shop
+            </a>
+            <a href="/cart" class="flex items-center gap-3 px-3 py-3 rounded-xl <?= $uri === '/cart' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-slate-700 hover:bg-slate-50' ?> transition">
+                <i class="fa-solid fa-cart-shopping w-5 text-center"></i> Cart
+            </a>
+            <a href="/profile" class="flex items-center gap-3 px-3 py-3 rounded-xl <?= $uri === '/profile' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-slate-700 hover:bg-slate-50' ?> transition">
+                <i class="fa-solid fa-user w-5 text-center"></i> Profile
+            </a>
+            <a href="/contact" class="flex items-center gap-3 px-3 py-3 rounded-xl <?= $uri === '/contact' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-slate-700 hover:bg-slate-50' ?> transition">
+                <i class="fa-solid fa-headset w-5 text-center"></i> Contact
+            </a>
+        </nav>
+        <?php if (!isset($_SESSION['user_id'])): ?>
+        <div class="px-4 mt-auto pb-8" onclick="event.stopPropagation()">
+            <a href="/login" class="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition">
+                Sign In
+            </a>
+        </div>
+        <?php endif; ?>
+    </div>
+
+
+    <!-- ============================================================ -->
+    <!-- JAVASCRIPT                                                    -->
+    <!-- ============================================================ -->
+    <script>
+        /* ── Search overlay ─────────────────────────────────────── */
+        let searchOpen = false;
+        function toggleSearch() {
+            searchOpen = !searchOpen;
+            document.querySelectorAll('#search-overlay').forEach(el => {
+                el.classList.toggle('open', searchOpen);
+            });
+            if (searchOpen) {
+                const inp = document.getElementById('search-input') || document.getElementById('search-input-mobile');
+                if (inp) inp.focus();
             }
         }
 
-        // Global Add to Cart
+        /* ── Mobile menu overlay ─────────────────────────────────── */
+        function toggleMobileMenu() {
+            const overlay = document.getElementById('mobile-menu-overlay');
+            overlay.classList.toggle('hidden');
+            overlay.classList.toggle('open');
+        }
+
+        /* ── Cart count ──────────────────────────────────────────── */
+        function updateCartCount() {
+            const cart = JSON.parse(localStorage.getItem('cart')) || [];
+            const count = cart.reduce((sum, item) => sum + (item.qty || 1), 0);
+
+            ['desktop-cart-count', 'mobile-cart-count', 'mobile-cart-count-top'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.textContent = count;
+                    el.classList.toggle('hidden', count === 0);
+                }
+            });
+        }
+
+        /* ── Global addToCart ─────────────────────────────────────── */
         window.addToCart = function(btn) {
-            const id = btn.dataset.id;
-            const name = btn.dataset.name;
-            const price = parseFloat(btn.dataset.price);
-            const image = btn.dataset.image;
-            const type = btn.dataset.type;
+            const id       = btn.dataset.id;
+            const name     = btn.dataset.name;
+            const price    = parseFloat(btn.dataset.price);
+            const image    = btn.dataset.image  || '';
+            const type     = btn.dataset.type   || 'physical';
             const maxStock = parseInt(btn.dataset.stock || 0);
 
-            let cart = JSON.parse(localStorage.getItem('cart')) || [];
+            let cart     = JSON.parse(localStorage.getItem('cart')) || [];
             let existing = cart.find(item => item.id === id);
 
             if (existing) {
-                if(type === 'physical' && existing.qty + 1 > maxStock) {
-                    alert("Sorry, out of stock!");
+                if (type === 'physical' && existing.qty + 1 > maxStock) {
+                    alert('Sorry, maximum stock reached!');
                     return;
                 }
                 existing.qty += 1;
             } else {
-                if(type === 'physical' && maxStock < 1) {
-                    alert("Sorry, out of stock!");
+                if (type === 'physical' && maxStock < 1) {
+                    alert('Sorry, this item is out of stock!');
                     return;
                 }
                 cart.push({ id, name, price, image, type, qty: 1 });
@@ -230,18 +486,21 @@
 
             localStorage.setItem('cart', JSON.stringify(cart));
             updateCartCount();
-            
-            // Animation Feedback
-            const originalContent = btn.innerHTML;
-            btn.innerHTML = `<i class="fa-solid fa-check"></i>`;
-            btn.classList.add('bg-green-500', 'border-green-400');
+
+            /* Visual feedback */
+            const original = btn.innerHTML;
+            const originalClass = btn.className;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+            btn.classList.add('!bg-green-500', '!border-green-400', '!text-white');
+            btn.disabled = true;
             setTimeout(() => {
-                btn.innerHTML = originalContent;
-                btn.classList.remove('bg-green-500', 'border-green-400');
+                btn.innerHTML = original;
+                btn.className = originalClass;
+                btn.disabled = false;
             }, 1000);
         };
 
-        // Init
+        /* ── Init ─────────────────────────────────────────────────── */
         document.addEventListener('DOMContentLoaded', updateCartCount);
     </script>
 </body>
