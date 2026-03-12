@@ -211,7 +211,7 @@
             const data = await res.json();
 
             if (res.ok && data.success) {
-                showAlert(data.message ?? 'Your message has been sent. We\'ll get back to you soon!', true);
+                showAlert(data.message ?? "Your message has been sent. We'll get back to you soon!", true);
                 form.reset();
             } else {
                 showAlert(data.message ?? 'Something went wrong. Please try again.', false);

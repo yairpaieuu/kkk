@@ -234,7 +234,7 @@
             data.products.forEach(p => {
                 const isDigital = p.type === 'digital';
 
-                const typeCls   = isDigital ? 'background:#dbeafe;color:#1d4ed8' : 'background:#f1f5f9;color:#475569';
+                const typeCls   = isDigital ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600';
                 const typeLabel = isDigital ? 'DIGITAL' : 'PHYSICAL';
 
                 const imgHtml = p.image
@@ -257,7 +257,7 @@
                                <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#f87171"></span> Out of Stock
                            </span>`);
 
-                let priceHtml, discountBadge = '';
+                let priceHtml = '', discountBadge = '';
                 if (p.has_discount && p.original_price && p.discount_percent > 0) {
                     priceHtml = `<div class="flex items-baseline gap-1.5">
                         <span class="text-base font-bold text-blue-600">${parseInt(p.price).toLocaleString()} Ks</span>
@@ -295,7 +295,7 @@
                     <div class="aspect-square overflow-hidden bg-slate-50 relative">
                         ${imgHtml}
                         ${discountBadge}
-                        <span class="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-md z-10" style="${typeCls}">${typeLabel}</span>
+                        <span class="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-md z-10 ${typeCls}">${typeLabel}</span>
                     </div>
                     <div class="p-3 flex flex-col flex-grow gap-2">
                         <h3 class="text-slate-800 font-semibold text-sm leading-snug line-clamp-2">${escHtml(p.name)}</h3>
