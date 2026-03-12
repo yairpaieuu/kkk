@@ -85,7 +85,7 @@
 <body class="flex flex-col min-h-screen">
 
 <?php
-    $uri = strtok($_SERVER['REQUEST_URI'], '?');
+    $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '/';
     $siteName = $siteSettings['site_name'] ?? 'Store';
     $phone    = $siteSettings['phone']     ?? '';
     $address  = $siteSettings['address']   ?? '';
@@ -155,15 +155,15 @@
 
         <!-- Search Slide-Down -->
         <div id="search-overlay" class="w-full bg-white border-t border-slate-100">
-            <div class="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3">
+            <form action="/shop" method="get" class="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3">
                 <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
-                <input id="search-input" type="text" placeholder="Search products…"
-                       class="flex-grow outline-none text-sm text-slate-800 placeholder-slate-400 bg-transparent"
-                       onkeydown="if(event.key==='Enter'){ window.location='/shop?q='+encodeURIComponent(this.value); }">
-                <button onclick="toggleSearch()" class="text-slate-400 hover:text-slate-600 transition">
+                <input id="search-input" type="text" name="q" placeholder="Search products…"
+                       class="flex-grow outline-none text-sm text-slate-800 placeholder-slate-400 bg-transparent">
+                <button type="submit" class="text-slate-500 hover:text-blue-600 transition text-sm font-medium">Search</button>
+                <button type="button" onclick="toggleSearch()" class="text-slate-400 hover:text-slate-600 transition">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
-            </div>
+            </form>
         </div>
     </header>
 
@@ -202,15 +202,17 @@
 
         <!-- Mobile Search Slide-Down -->
         <div id="search-overlay" class="w-full bg-white border-t border-slate-100 md:hidden">
-            <div class="px-4 py-2.5 flex items-center gap-3">
+            <form action="/shop" method="get" class="px-4 py-2.5 flex items-center gap-3">
                 <i class="fa-solid fa-magnifying-glass text-slate-400 text-sm"></i>
-                <input id="search-input-mobile" type="text" placeholder="Search products…"
-                       class="flex-grow outline-none text-sm text-slate-800 placeholder-slate-400 bg-transparent"
-                       onkeydown="if(event.key==='Enter'){ window.location='/shop?q='+encodeURIComponent(this.value); }">
-                <button onclick="toggleSearch()" class="text-slate-400">
+                <input id="search-input-mobile" type="text" name="q" placeholder="Search products…"
+                       class="flex-grow outline-none text-sm text-slate-800 placeholder-slate-400 bg-transparent">
+                <button type="submit" class="text-slate-500 hover:text-blue-600 transition text-sm">
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+                <button type="button" onclick="toggleSearch()" class="text-slate-400">
                     <i class="fa-solid fa-xmark text-sm"></i>
                 </button>
-            </div>
+            </form>
         </div>
     </header>
 
@@ -385,15 +387,18 @@
     <!-- 📱  MOBILE MENU OVERLAY  (triggered by toggleMobileMenu())   -->
     <!-- ============================================================ -->
     <div id="mobile-menu-overlay"
-         class="fixed inset-0 z-[60] flex-col bg-white hidden"
-         onclick="toggleMobileMenu()">
-        <div class="flex items-center justify-between px-4 py-4 border-b border-slate-200" onclick="event.stopPropagation()">
+         class="fixed inset-0 z-[60] flex-col bg-white hidden">
+        <!-- Backdrop (click outside panel to close) -->
+        <div class="absolute inset-0 bg-black/20" onclick="toggleMobileMenu()" aria-hidden="true"></div>
+        <!-- Panel -->
+        <div class="relative flex flex-col h-full max-w-xs w-full bg-white shadow-xl">
+        <div class="flex items-center justify-between px-4 py-4 border-b border-slate-200">
             <span class="font-bold text-slate-800 text-lg"><?= htmlspecialchars($siteName) ?></span>
-            <button onclick="toggleMobileMenu()" class="w-8 h-8 flex items-center justify-center text-slate-500">
+            <button onclick="toggleMobileMenu()" class="w-8 h-8 flex items-center justify-center text-slate-500" aria-label="Close menu">
                 <i class="fa-solid fa-xmark text-xl"></i>
             </button>
         </div>
-        <nav class="flex flex-col px-4 py-6 gap-1" onclick="event.stopPropagation()">
+        <nav class="flex flex-col px-4 py-6 gap-1">
             <a href="/" class="flex items-center gap-3 px-3 py-3 rounded-xl <?= $uri === '/' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-slate-700 hover:bg-slate-50' ?> transition">
                 <i class="fa-solid fa-house w-5 text-center"></i> Home
             </a>
@@ -411,12 +416,13 @@
             </a>
         </nav>
         <?php if (!isset($_SESSION['user_id'])): ?>
-        <div class="px-4 mt-auto pb-8" onclick="event.stopPropagation()">
+        <div class="px-4 mt-auto pb-8">
             <a href="/login" class="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition">
                 Sign In
             </a>
         </div>
         <?php endif; ?>
+        </div>
     </div>
 
 
@@ -447,7 +453,7 @@
         /* ── Cart count ──────────────────────────────────────────── */
         function updateCartCount() {
             const cart = JSON.parse(localStorage.getItem('cart')) || [];
-            const count = cart.reduce((sum, item) => sum + (item.qty || 1), 0);
+            const count = cart.reduce((sum, item) => sum + (item.qty ?? 1), 0);
 
             ['desktop-cart-count', 'mobile-cart-count', 'mobile-cart-count-top'].forEach(id => {
                 const el = document.getElementById(id);
@@ -491,11 +497,12 @@
             const original = btn.innerHTML;
             const originalClass = btn.className;
             btn.innerHTML = '<i class="fa-solid fa-check"></i>';
-            btn.classList.add('!bg-green-500', '!border-green-400', '!text-white');
+            btn.style.cssText = 'background-color:#22c55e !important; border-color:#16a34a !important; color:#fff !important;';
             btn.disabled = true;
             setTimeout(() => {
                 btn.innerHTML = original;
                 btn.className = originalClass;
+                btn.style.cssText = '';
                 btn.disabled = false;
             }, 1000);
         };
