@@ -2,8 +2,8 @@
 class Database {
     private $host = "127.0.0.1";
     private $port = "3306";
-    private $db_name = "u619478096_kkk";
-    private $username = "u619478096_kkk";
+    private $db_name = "u521037437_k";
+    private $username = "u521037437_k";
     private $password = '$Citytaxi02';// Escaped the $ sign
     public $conn;
 
